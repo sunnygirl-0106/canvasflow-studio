@@ -1,0 +1,42 @@
+import { Handle, Position } from "@xyflow/react";
+import { useState } from "react";
+import { Sparkles, Loader2 } from "lucide-react";
+import { useCanvas, type CanvasNode } from "@/store/canvasStore";
+
+export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
+  const updateNode = useCanvas((s) => s.updateNode);
+  const [busy, setBusy] = useState(false);
+
+  const generate = () => {
+    setBusy(true);
+    setTimeout(() => {
+      const seed = Math.random().toString(36).slice(2, 7);
+      updateNode(id, { data: { ...data, src: `https://picsum.photos/seed/${seed}/400/225` } } as any);
+      setBusy(false);
+    }, 2000);
+  };
+
+  return (
+    <div className="w-[240px] h-[160px] rounded-xl bg-card border-2 border-dashed border-border node-shadow overflow-hidden fade-in flex flex-col">
+      <Handle type="target" position={Position.Left} id="in" />
+      <div className="flex-1 bg-secondary/30 overflow-hidden flex items-center justify-center text-muted-foreground text-[11px] text-center px-3">
+        {data.src ? (
+          <img src={data.src} alt="" className="w-full h-full object-cover" draggable={false} />
+        ) : (
+          <div className="flex flex-col items-center gap-1">
+            <Sparkles className="w-5 h-5 text-accent" />
+            <span>已连接参考图片<br/>点击下方按钮生成</span>
+          </div>
+        )}
+      </div>
+      <button
+        onClick={generate}
+        disabled={busy}
+        className="text-xs py-1.5 bg-primary/30 hover:bg-primary/50 text-foreground border-t border-border flex items-center justify-center gap-1.5 transition-colors"
+      >
+        {busy ? <><Loader2 className="w-3 h-3 animate-spin" />生成中…</> : <><Sparkles className="w-3 h-3" />生成</>}
+      </button>
+      <Handle type="source" position={Position.Right} id="out" />
+    </div>
+  );
+}
