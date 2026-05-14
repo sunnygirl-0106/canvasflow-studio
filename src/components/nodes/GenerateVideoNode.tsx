@@ -152,7 +152,7 @@ export function GenerateVideoNode({ id, data }: { id: string; data: CanvasNode["
       <Handle
         type="source"
         position={Position.Right}
-        id="out"
+        id="source-process"
         style={{
           width: 16,
           height: 28,
@@ -164,8 +164,24 @@ export function GenerateVideoNode({ id, data }: { id: string; data: CanvasNode["
         }}
       />
 
-      {/* Hover hint near right handle */}
-      <NodeHandleHint />
+      {/* Output handle — bottom center, for timeline connections */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="source-timeline"
+        style={{
+          width: 18,
+          height: 10,
+          borderRadius: "0 0 9px 9px",
+          background: "#F97316",
+          border: "none",
+          bottom: -2,
+          left: "50%",
+        }}
+      />
+
+      {/* Hover hint near bottom handle */}
+      <NodeHandleHint position="bottom" />
 
       {/* Generation prompt panel — auto-shows when this node is selected */}
       <NodeToolbar position={Position.Bottom} offset={16}>

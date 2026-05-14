@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -70,6 +70,7 @@ function Canvas() {
   const updateNode = useCanvas((s) => s.updateNode);
   const select = useCanvas((s) => s.select);
   const addEdgeFn = useCanvas((s) => s.addEdge);
+  const addNodeToTimeline = useCanvas((s) => s.addNodeToTimeline);
   const removeEdgeFn = useCanvas((s) => s.removeEdge);
   const undo = useCanvas((s) => s.undo);
   const redo = useCanvas((s) => s.redo);
@@ -93,7 +94,7 @@ function Canvas() {
       edges.map((e) => ({
         id: e.id,
         source: e.from,
-        sourceHandle: "out",
+        sourceHandle: e.sourceHandle ?? "out",
         target: findHostNodeId(nodes, e.to),
         targetHandle: e.toHandle ?? (isShotId(nodes, e.to) ? e.to : undefined),
         type: "default",
@@ -132,9 +133,52 @@ function Canvas() {
 
   const onConnect = (c: Connection) => {
     if (!c.source || !c.target) return;
+    // Any connection to a timeline node → add as shot
+    const targetNode = nodes.find((n) => n.id === c.target);
+    if (targetNode?.kind === "timeline") {
+      addNodeToTimeline(c.source);
+      return;
+    }
     const target = c.targetHandle ?? c.target;
     addEdgeFn(c.source, target);
   };
+
+  // Track which node started the connection drag
+  const connectingSourceRef = useRef<string | null>(null);
+
+  const onConnectStart = useCallback((_: any, params: { nodeId: string | null }) => {
+    connectingSourceRef.current = params.nodeId;
+  }, []);
+
+  // When connection drag ends without hitting a handle,
+  // check if mouse is over a timeline node and auto-connect
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      const sourceId = connectingSourceRef.current;
+      connectingSourceRef.current = null;
+      if (!sourceId) return;
+
+      // Get the mouse/touch position
+      const clientX = "changedTouches" in event ? event.changedTouches[0].clientX : event.clientX;
+      const clientY = "changedTouches" in event ? event.changedTouches[0].clientY : event.clientY;
+
+      // Find the element under the cursor
+      const elementsUnder = document.elementsFromPoint(clientX, clientY);
+      // Walk up from each element to find a ReactFlow node wrapper with data-id
+      for (const el of elementsUnder) {
+        const nodeEl = (el as HTMLElement).closest?.(".react-flow__node");
+        if (!nodeEl) continue;
+        const targetId = nodeEl.getAttribute("data-id");
+        if (!targetId) continue;
+        const targetNode = useCanvas.getState().nodes.find((n) => n.id === targetId);
+        if (targetNode?.kind === "timeline" && targetId !== sourceId) {
+          addNodeToTimeline(sourceId);
+          return;
+        }
+      }
+    },
+    [addNodeToTimeline],
+  );
 
   return (
     <div className="absolute inset-0 canvas-bg">
@@ -145,6 +189,8 @@ function Canvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
         onPaneClick={() => {
           select(null);
           setContextMenu(null);

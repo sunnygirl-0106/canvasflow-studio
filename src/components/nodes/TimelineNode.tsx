@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
-import { useCanvas, type CanvasNode } from "@/store/canvasStore";
+import { useCanvas, type CanvasNode, type Shot } from "@/store/canvasStore";
 import {
   Play,
   Pause,
@@ -14,7 +14,10 @@ import {
   Captions,
   Sparkles,
   Music,
+  X,
+  Maximize2,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 /* ── colour tokens from .pen ───────────────────────────────── */
 const COLORS = {
@@ -52,11 +55,14 @@ const COLORS = {
 };
 
 /* ── Clip style definitions ────────────────────────────────── */
-const CLIP_STYLES = [
-  { bg: "#0E7490", border: "#67E8F9", thumbBg: "#155E75", timeColor: "#CFFAFE" },
-  { bg: "#5B21B6", border: "#A78BFA", thumbBg: "#6D28D9", timeColor: "#EDE9FE" },
-  { bg: "#C2410C", border: "#FDBA74", thumbBg: "#9A3412", timeColor: "#FFEDD5" },
-];
+const CLIP_STYLES: Record<Shot["color"], { bg: string; border: string; thumbBg: string; timeColor: string }> = {
+  cyan: { bg: "#0E7490", border: "#67E8F9", thumbBg: "#155E75", timeColor: "#CFFAFE" },
+  purple: { bg: "#5B21B6", border: "#A78BFA", thumbBg: "#6D28D9", timeColor: "#EDE9FE" },
+  yellow: { bg: "#C2410C", border: "#FDBA74", thumbBg: "#9A3412", timeColor: "#FFEDD5" },
+  rose: { bg: "#9F1239", border: "#FDA4AF", thumbBg: "#881337", timeColor: "#FFE4E6" },
+  emerald: { bg: "#047857", border: "#6EE7B7", thumbBg: "#065F46", timeColor: "#D1FAE5" },
+  gray: { bg: "#475569", border: "#94A3B8", thumbBg: "#334155", timeColor: "#E2E8F0" },
+};
 
 /* ── Waveform bars for audio track ─────────────────────────── */
 const WAVE_BARS = [
@@ -84,22 +90,8 @@ const PX_PER_SEC = CANVAS_W / VISIBLE_SECS;
 const CLIP_H = 52;
 const CLIP_Y = 10;
 
-/* ── Clip data (only width matters, x is derived) ──────────── */
-interface ClipDef {
-  id: string;
-  title: string;
-  durationSec: number; // duration in seconds
-  styleIdx: number;
-}
-
-const INITIAL_CLIPS: ClipDef[] = [
-  { id: "clip1", title: "视频节点 7 · 开场", durationSec: 11, styleIdx: 0 },
-  { id: "clip2", title: "视频节点 7 · 主场景", durationSec: 15, styleIdx: 1 },
-  { id: "clip3", title: "视频节点 7 · 收束", durationSec: 13, styleIdx: 2 },
-];
-
-const TRACK_PAD_LEFT = 24; // left padding inside tracks canvas
-const MIN_DURATION_SEC = 2; // minimum clip duration
+const TRACK_PAD_LEFT = 24;
+const MIN_DURATION_SEC = 2;
 
 /* ── Helpers ───────────────────────────────────────────────── */
 function fmtSec(s: number) {
@@ -108,14 +100,19 @@ function fmtSec(s: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-/** Compute x positions from durations — clips always sit flush */
-function layoutClips(clips: ClipDef[]) {
+interface LayoutClip {
+  shot: Shot;
+  x: number;
+  w: number;
+}
+
+function layoutShots(shots: Shot[]): LayoutClip[] {
   let cursor = TRACK_PAD_LEFT;
-  return clips.map((c) => {
+  return shots.map((shot) => {
     const x = cursor;
-    const w = c.durationSec * PX_PER_SEC;
+    const w = shot.duration * PX_PER_SEC;
     cursor += w;
-    return { ...c, x, w };
+    return { shot, x, w };
   });
 }
 
@@ -141,22 +138,36 @@ const GRID_LINES = buildGridLines();
 
 /* ═══════════════════════════════════════════════════════════ */
 
+interface DragState {
+  shotId: string;
+  startMouseX: number;
+  originIdx: number;
+  offsetX: number; // px offset from clip left edge to mouse
+}
+
 export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
-  const [clipDefs, setClipDefs] = useState<ClipDef[]>(INITIAL_CLIPS);
+  const updateShot = useCanvas((s) => s.updateShot);
+  const reorderShots = useCanvas((s) => s.reorderShots);
+  const pushHistory = useCanvas((s) => s.pushHistory);
   const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(19);
-  const [resizingClipId, setResizingClipId] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [resizingShotId, setResizingShotId] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [dragCurrentX, setDragCurrentX] = useState(0);
+  const [previewOpen, setPreviewOpen] = useState(false); // mouse x relative to tracks canvas
   const editorRef = useRef<HTMLDivElement>(null);
+  const tracksRef = useRef<HTMLDivElement>(null);
   const updateNodeInternals = useUpdateNodeInternals();
 
-  // Derived: compute positions from durations (always flush)
-  const clips = layoutClips(clipDefs);
-  const totalDuration = clipDefs.reduce((sum, c) => sum + c.durationSec, 0);
+  const shots = data.shots ?? [];
+  const clips = layoutShots(shots);
+  const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
+  const connectedCount = shots.filter((s) => s.bindings.length > 0).length;
 
-  // Update React Flow handle positions when clips change
+  // Update React Flow handle positions when shots change
   useEffect(() => {
     updateNodeInternals(id);
-  }, [clipDefs, id, updateNodeInternals]);
+  }, [shots, id, updateNodeInternals]);
 
   // Playback
   useEffect(() => {
@@ -216,14 +227,15 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
 
   /* ── Resize handler (works for both left and right edges) ── */
   const handleResize = useCallback(
-    (clipId: string, edge: "left" | "right", e: React.PointerEvent) => {
+    (shotId: string, edge: "left" | "right", e: React.PointerEvent) => {
       e.stopPropagation();
       e.preventDefault();
-      setResizingClipId(clipId);
+      setResizingShotId(shotId);
 
+      const shot = shots.find((s) => s.id === shotId);
+      if (!shot) return;
       const startMouseX = e.clientX;
-      const idx = clipDefs.findIndex((c) => c.id === clipId);
-      const startDuration = clipDefs[idx].durationSec;
+      const startDuration = shot.duration;
 
       const move = (ev: PointerEvent) => {
         const deltaPx = ev.clientX - startMouseX;
@@ -231,27 +243,109 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
 
         let newDuration: number;
         if (edge === "right") {
-          // drag right edge → duration changes directly
           newDuration = Math.max(MIN_DURATION_SEC, startDuration + deltaSec);
         } else {
-          // drag left edge → shrink from left (duration decreases when dragging right)
           newDuration = Math.max(MIN_DURATION_SEC, startDuration - deltaSec);
         }
 
-        setClipDefs((prev) =>
-          prev.map((c) => (c.id === clipId ? { ...c, durationSec: Math.round(newDuration * 10) / 10 } : c)),
-        );
+        updateShot(id, shotId, { duration: Math.round(newDuration * 10) / 10 });
       };
       const up = () => {
-        setResizingClipId(null);
+        setResizingShotId(null);
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
     },
-    [clipDefs],
+    [shots, id, updateShot],
   );
+
+  /* ── Clip drag-to-reorder ─────────────────────────────── */
+  const handleClipDragStart = useCallback(
+    (shotId: string, e: React.PointerEvent) => {
+      // Only start drag from middle area (not resize edges)
+      e.stopPropagation();
+      e.preventDefault();
+      const tracksRect = tracksRef.current?.getBoundingClientRect();
+      if (!tracksRect) return;
+
+      const idx = shots.findIndex((s) => s.id === shotId);
+      const clip = layoutShots(shots)[idx];
+      if (!clip) return;
+
+      const mouseXInTracks = e.clientX - tracksRect.left;
+      const offsetX = mouseXInTracks - clip.x;
+
+      pushHistory();
+
+      const state: DragState = {
+        shotId,
+        startMouseX: e.clientX,
+        originIdx: idx,
+        offsetX,
+      };
+      setDragState(state);
+      setDragCurrentX(mouseXInTracks);
+
+      const move = (ev: PointerEvent) => {
+        const mx = ev.clientX - tracksRect.left;
+        setDragCurrentX(mx);
+      };
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+
+        // Compute final drop index
+        const mx = ev.clientX - tracksRect.left;
+        const ghostCenter = mx - offsetX + clip.w / 2;
+        const currentShots = useCanvas.getState().nodes.find((n) => n.id === id)?.data.shots ?? shots;
+        const currentLayout = layoutShots(currentShots);
+        let dropIdx = currentShots.length; // default: end
+        for (let i = 0; i < currentLayout.length; i++) {
+          const midX = currentLayout[i].x + currentLayout[i].w / 2;
+          if (ghostCenter < midX) {
+            dropIdx = i;
+            break;
+          }
+        }
+
+        // Build new order
+        const dragIdx = currentShots.findIndex((s) => s.id === shotId);
+        if (dragIdx !== -1 && dropIdx !== dragIdx && dropIdx !== dragIdx + 1) {
+          const ids = currentShots.map((s) => s.id);
+          const [removed] = ids.splice(dragIdx, 1);
+          const insertAt = dropIdx > dragIdx ? dropIdx - 1 : dropIdx;
+          ids.splice(insertAt, 0, removed);
+          reorderShots(id, ids);
+        }
+
+        setDragState(null);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    },
+    [shots, id, pushHistory, reorderShots],
+  );
+
+  // Compute drop indicator position during drag
+  const dropIndicatorX = (() => {
+    if (!dragState) return null;
+    const clip = layoutShots(shots)[dragState.originIdx];
+    if (!clip) return null;
+    const ghostCenter = dragCurrentX - dragState.offsetX + clip.w / 2;
+    const layout = layoutShots(shots);
+    for (let i = 0; i < layout.length; i++) {
+      if (i === dragState.originIdx) continue;
+      const midX = layout[i].x + layout[i].w / 2;
+      if (ghostCenter < midX) {
+        return layout[i].x;
+      }
+    }
+    // After last clip
+    const last = layout[layout.length - 1];
+    return last ? last.x + last.w : TRACK_PAD_LEFT;
+  })();
 
   /* ── Compute port positions (clip centers) ─────────────── */
   const portPositions = clips.map((c) => {
@@ -261,10 +355,9 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
 
   /* ── Drop zone position ────────────────────────────────── */
   const lastClip = clips[clips.length - 1];
-  const dropX = lastClip ? lastClip.x + lastClip.w : 24;
+  const dropX = lastClip ? lastClip.x + lastClip.w : TRACK_PAD_LEFT;
 
-  const shots = data.shots ?? [];
-  const connectedCount = shots.filter((s) => s.bindings.length > 0).length || 3;
+  const portColors = [COLORS.port1, COLORS.port2, COLORS.port3];
 
   return (
     <div
@@ -277,21 +370,37 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
       }}
     >
       {/* ── Input Ports (dynamic, aligned to clip centers) ── */}
-      {clips.map((_, i) => (
+      {clips.map((c, i) => (
         <Handle
-          key={`port-${i + 1}`}
+          key={`port-${c.shot.id}`}
           type="target"
           position={Position.Top}
-          id={`port-${i + 1}`}
+          id={c.shot.id}
           style={{
             left: `${portPositions[i]}%`,
-            background: [COLORS.port1, COLORS.port2, COLORS.port3][i],
-            border: `3px solid ${[COLORS.port1, COLORS.port2, COLORS.port3][i]}`,
+            background: portColors[i % portColors.length],
+            border: `3px solid ${portColors[i % portColors.length]}`,
             width: 14,
             height: 14,
           }}
         />
       ))}
+
+      {/* ── Fallback target handle when no shots ── */}
+      {clips.length === 0 && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          id="default-target"
+          style={{
+            left: "50%",
+            background: COLORS.port1,
+            border: `3px solid ${COLORS.port1}`,
+            width: 14,
+            height: 14,
+          }}
+        />
+      )}
 
       {/* ── Output Port ── */}
       <Handle type="source" position={Position.Right} style={{ background: COLORS.editorBg, border: `2px solid ${COLORS.editorBg}`, width: 20, height: 20 }} />
@@ -315,18 +424,26 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
             {data.name ?? "时间线节点 1"}
           </div>
           <div className="text-[13px]" style={{ color: COLORS.textSecondary, fontFamily: "Inter, system-ui" }}>
-            已连接 {connectedCount} 个视频节点 · 输出 {fmtSec(totalDuration)} 合成片段
+            {connectedCount > 0
+              ? `已连接 ${connectedCount} 个视频节点 · 输出 ${fmtSec(totalDuration)} 合成片段`
+              : "还没有镜头"}
           </div>
         </div>
         <div className="flex-1" />
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { setCurrentTime(0); setPlaying((p) => !p); }}
+            onClick={() => {
+              if (shots.length > 0) {
+                setPreviewOpen(true);
+                setCurrentTime(0);
+                setPlaying(true);
+              }
+            }}
             className="flex items-center gap-2 rounded-xl text-sm font-medium"
             style={{ height: 36, padding: "0 14px", background: COLORS.editorBg, color: COLORS.textWhite }}
           >
-            {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            <span>{playing ? "暂停" : "预览"}</span>
+            <Play className="w-4 h-4" />
+            <span>预览</span>
           </button>
           <button
             className="flex items-center gap-2 rounded-xl text-sm font-medium"
@@ -385,6 +502,7 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
 
         {/* Tracks Canvas */}
         <div
+          ref={tracksRef}
           className="absolute"
           style={{ left: TRACK_LABEL_W, top: RULER_H, width: `calc(100% - ${TRACK_LABEL_W}px)`, height: TRACKS_H }}
         >
@@ -401,101 +519,191 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
             <div key={x} className="absolute" style={{ left: x, top: 0, width: 1, height: TRACKS_H, background: COLORS.gridLine }} />
           ))}
 
-          {/* ── V1 Clips (interactive) ── */}
-          {clips.map((clip) => {
-            const style = CLIP_STYLES[clip.styleIdx];
-            // compute time range from position
-            const startSec = (clip.x - TRACK_PAD_LEFT) / PX_PER_SEC;
-            const endSec = startSec + clip.durationSec;
-            const timeLabel = `${fmtSec(startSec)} - ${fmtSec(endSec)}`;
-            const isResizing = resizingClipId === clip.id;
+          {/* ── V1 Clips from data.shots ── */}
+          {clips.length === 0 ? (
+            /* Empty state */
+            <div
+              className="absolute flex items-center justify-center gap-3 rounded-xl"
+              style={{
+                left: TRACK_PAD_LEFT,
+                top: CLIP_Y,
+                width: Math.min(600, CANVAS_W - 48),
+                height: CLIP_H,
+                background: COLORS.dropBg,
+                border: `1.5px dashed ${COLORS.dropBorder}`,
+              }}
+            >
+              <Plus className="w-[18px] h-[18px]" style={{ color: COLORS.textLight }} />
+              <span className="text-[13px] font-semibold" style={{ color: COLORS.textLight, fontFamily: "Inter, system-ui" }}>
+                还没有镜头，把素材拖到这里
+              </span>
+            </div>
+          ) : (
+            <>
+              {clips.map((clip) => {
+                const style = CLIP_STYLES[clip.shot.color] ?? CLIP_STYLES.gray;
+                const startSec = (clip.x - TRACK_PAD_LEFT) / PX_PER_SEC;
+                const endSec = startSec + clip.shot.duration;
+                const timeLabel = `${fmtSec(startSec)} - ${fmtSec(endSec)}`;
+                const isResizing = resizingShotId === clip.shot.id;
+                const isDragging = dragState?.shotId === clip.shot.id;
 
-            return (
+                return (
+                  <div
+                    key={clip.shot.id}
+                    className="absolute rounded-xl overflow-visible select-none"
+                    style={{
+                      left: clip.x,
+                      top: CLIP_Y,
+                      width: clip.w,
+                      height: CLIP_H,
+                      background: style.bg,
+                      border: `2px solid ${style.border}`,
+                      boxShadow: isResizing ? `0 0 0 2px ${style.border}40` : undefined,
+                      opacity: isDragging ? 0.35 : 1,
+                      cursor: dragState ? "grabbing" : "grab",
+                    }}
+                    onPointerDown={(e) => {
+                      // Don't start drag if near edges (resize zones = 8px each side)
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const relX = e.clientX - rect.left;
+                      if (relX < 10 || relX > rect.width - 10) return;
+                      handleClipDragStart(clip.shot.id, e);
+                    }}
+                  >
+                    {/* Left resize handle */}
+                    <div
+                      onPointerDown={(e) => { e.stopPropagation(); handleResize(clip.shot.id, "left", e); }}
+                      className="absolute left-0 top-0 h-full w-2 cursor-ew-resize z-10 group"
+                    >
+                      <div
+                        className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ background: style.border }}
+                      />
+                    </div>
+
+                    {/* Right resize handle */}
+                    <div
+                      onPointerDown={(e) => { e.stopPropagation(); handleResize(clip.shot.id, "right", e); }}
+                      className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-10 group"
+                    >
+                      <div
+                        className="absolute right-0 top-2 bottom-2 w-[3px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ background: style.border }}
+                      />
+                    </div>
+
+                    {/* Thumbnail */}
+                    {clip.shot.thumbnail ? (
+                      <img
+                        src={clip.shot.thumbnail}
+                        alt=""
+                        className="absolute rounded-lg object-cover"
+                        style={{ left: 10, top: 10, width: 64, height: 32 }}
+                        draggable={false}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : null}
+                    <div className="absolute rounded-lg" style={{ left: 10, top: 10, width: 64, height: 32, background: style.thumbBg, zIndex: -1 }} />
+
+                    {/* Title */}
+                    <span
+                      className="absolute text-[13px] font-bold truncate"
+                      style={{ left: 84, top: 9, right: 12, color: COLORS.textWhite, fontFamily: "Inter, system-ui", whiteSpace: "nowrap" }}
+                    >
+                      {clip.shot.name}
+                    </span>
+
+                    {/* Time label */}
+                    <span
+                      className="absolute text-[11px] font-medium"
+                      style={{ left: 84, top: 29, color: style.timeColor, fontFamily: "Inter, monospace" }}
+                    >
+                      {timeLabel}
+                    </span>
+
+                    {/* Duration tooltip while resizing */}
+                    {isResizing && (
+                      <div
+                        className="absolute -top-7 left-1/2 -translate-x-1/2 text-[11px] font-mono px-2 py-0.5 rounded whitespace-nowrap"
+                        style={{ background: style.bg, color: COLORS.textWhite, border: `1px solid ${style.border}` }}
+                      >
+                        {clip.shot.duration.toFixed(1)}s
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* ── Drag ghost (follows mouse) ── */}
+              {dragState && (() => {
+                const dragIdx = shots.findIndex((s) => s.id === dragState.shotId);
+                const clip = clips[dragIdx];
+                if (!clip) return null;
+                const style = CLIP_STYLES[clip.shot.color] ?? CLIP_STYLES.gray;
+                const ghostLeft = dragCurrentX - dragState.offsetX;
+                return (
+                  <div
+                    className="absolute rounded-xl overflow-hidden pointer-events-none"
+                    style={{
+                      left: ghostLeft,
+                      top: CLIP_Y,
+                      width: clip.w,
+                      height: CLIP_H,
+                      background: style.bg,
+                      border: `2px solid ${style.border}`,
+                      opacity: 0.8,
+                      zIndex: 30,
+                      boxShadow: `0 4px 20px rgba(0,0,0,0.4)`,
+                    }}
+                  >
+                    <div className="absolute rounded-lg" style={{ left: 10, top: 10, width: 64, height: 32, background: style.thumbBg }} />
+                    {clip.shot.thumbnail && (
+                      <img src={clip.shot.thumbnail} alt="" className="absolute rounded-lg object-cover" style={{ left: 10, top: 10, width: 64, height: 32 }} draggable={false} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    )}
+                    <span className="absolute text-[13px] font-bold truncate" style={{ left: 84, top: 9, right: 12, color: COLORS.textWhite, fontFamily: "Inter, system-ui", whiteSpace: "nowrap" }}>
+                      {clip.shot.name}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              {/* ── Drop indicator line ── */}
+              {dragState && dropIndicatorX !== null && (
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: dropIndicatorX - 1.5,
+                    top: 4,
+                    width: 3,
+                    height: CLIP_H + 12,
+                    background: COLORS.playhead,
+                    borderRadius: 2,
+                    zIndex: 31,
+                  }}
+                />
+              )}
+
+              {/* ── Drop More Zone ── */}
               <div
-                key={clip.id}
-                className="absolute rounded-xl overflow-visible select-none"
+                className="absolute flex items-center gap-[10px] rounded-xl drop-pulse"
                 style={{
-                  left: clip.x,
+                  left: dropX,
                   top: CLIP_Y,
-                  width: clip.w,
+                  width: Math.max(200, Math.min(500, CANVAS_W - dropX - 20)),
                   height: CLIP_H,
-                  background: style.bg,
-                  border: `2px solid ${style.border}`,
-                  boxShadow: isResizing ? `0 0 0 2px ${style.border}40` : undefined,
+                  padding: "0 18px",
+                  background: COLORS.dropBg,
+                  border: `1.5px dashed ${COLORS.dropBorder}`,
                 }}
               >
-                {/* Left resize handle */}
-                <div
-                  onPointerDown={(e) => handleResize(clip.id, "left", e)}
-                  className="absolute left-0 top-0 h-full w-2 cursor-ew-resize z-10 group"
-                >
-                  <div
-                    className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: style.border }}
-                  />
-                </div>
-
-                {/* Right resize handle */}
-                <div
-                  onPointerDown={(e) => handleResize(clip.id, "right", e)}
-                  className="absolute right-0 top-0 h-full w-2 cursor-ew-resize z-10 group"
-                >
-                  <div
-                    className="absolute right-0 top-2 bottom-2 w-[3px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: style.border }}
-                  />
-                </div>
-
-                {/* Thumbnail */}
-                <div className="absolute rounded-lg" style={{ left: 10, top: 10, width: 64, height: 32, background: style.thumbBg }} />
-
-                {/* Title */}
-                <span
-                  className="absolute text-[13px] font-bold truncate"
-                  style={{ left: 84, top: 9, right: 12, color: COLORS.textWhite, fontFamily: "Inter, system-ui", whiteSpace: "nowrap" }}
-                >
-                  {clip.title}
+                <Plus className="w-[18px] h-[18px]" style={{ color: COLORS.textLight }} />
+                <span className="text-[13px] font-semibold" style={{ color: COLORS.textLight, fontFamily: "Inter, system-ui" }}>
+                  拖入更多视频节点继续拼接
                 </span>
-
-                {/* Time label */}
-                <span
-                  className="absolute text-[11px] font-medium"
-                  style={{ left: 84, top: 29, color: style.timeColor, fontFamily: "Inter, monospace" }}
-                >
-                  {timeLabel}
-                </span>
-
-                {/* Duration tooltip while resizing */}
-                {isResizing && (
-                  <div
-                    className="absolute -top-7 left-1/2 -translate-x-1/2 text-[11px] font-mono px-2 py-0.5 rounded whitespace-nowrap"
-                    style={{ background: style.bg, color: COLORS.textWhite, border: `1px solid ${style.border}` }}
-                  >
-                    {clip.durationSec.toFixed(1)}s
-                  </div>
-                )}
               </div>
-            );
-          })}
-
-          {/* ── Drop More Zone ── */}
-          <div
-            className="absolute flex items-center gap-[10px] rounded-xl drop-pulse"
-            style={{
-              left: dropX,
-              top: CLIP_Y,
-              width: Math.max(200, Math.min(500, CANVAS_W - dropX - 20)),
-              height: CLIP_H,
-              padding: "0 18px",
-              background: COLORS.dropBg,
-              border: `1.5px dashed ${COLORS.dropBorder}`,
-            }}
-          >
-            <Plus className="w-[18px] h-[18px]" style={{ color: COLORS.textLight }} />
-            <span className="text-[13px] font-semibold" style={{ color: COLORS.textLight, fontFamily: "Inter, system-ui" }}>
-              拖入更多视频节点继续拼接
-            </span>
-          </div>
+            </>
+          )}
 
           {/* ── V2 Overlay Clips ── */}
           <div
@@ -539,6 +747,199 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
             {fmtSec(currentTime)}
           </span>
         </div>
+      </div>
+
+      {/* ── Floating Preview Window (portal to body) ── */}
+      {previewOpen && createPortal(
+        <PreviewWindow
+          shots={shots}
+          currentTime={currentTime}
+          totalDuration={totalDuration}
+          playing={playing}
+          timelineName={data.name ?? "时间线"}
+          onClose={() => { setPreviewOpen(false); setPlaying(false); }}
+          onTogglePlay={() => {
+            if (!playing && currentTime >= totalDuration) setCurrentTime(0);
+            setPlaying((p) => !p);
+          }}
+          fmtSec={fmtSec}
+        />,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+/* ── Preview Window Component ──────────────────────────────── */
+function PreviewWindow({
+  shots,
+  currentTime,
+  totalDuration,
+  playing,
+  timelineName,
+  onClose,
+  onTogglePlay,
+  fmtSec,
+}: {
+  shots: Shot[];
+  currentTime: number;
+  totalDuration: number;
+  playing: boolean;
+  timelineName: string;
+  onClose: () => void;
+  onTogglePlay: () => void;
+  fmtSec: (s: number) => string;
+}) {
+  // Find which shot is currently playing
+  let elapsed = 0;
+  let activeShot: Shot | null = null;
+  for (const shot of shots) {
+    if (currentTime < elapsed + shot.duration) {
+      activeShot = shot;
+      break;
+    }
+    elapsed += shot.duration;
+  }
+  if (!activeShot && shots.length > 0) activeShot = shots[shots.length - 1];
+
+  const activeStyle = activeShot ? (CLIP_STYLES[activeShot.color] ?? CLIP_STYLES.gray) : CLIP_STYLES.gray;
+  const progress = totalDuration > 0 ? Math.min(1, currentTime / totalDuration) : 0;
+
+  return (
+    <div
+      className="fixed z-50 fade-in"
+      style={{
+        top: 80,
+        right: 32,
+        width: 480,
+        borderRadius: 20,
+        background: "#0F172A",
+        boxShadow: "0 24px 60px rgba(0,0,0,0.4)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Title bar */}
+      <div
+        className="flex items-center justify-between"
+        style={{ padding: "12px 16px", background: "#1E293B" }}
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4" style={{ color: "#22D3EE" }} />
+          <span className="text-[13px] font-semibold" style={{ color: "#F1F5F9", fontFamily: "Inter, system-ui" }}>
+            {timelineName} · 预览
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center rounded-lg hover:bg-white/10"
+            style={{ width: 28, height: 28 }}
+          >
+            <X className="w-4 h-4" style={{ color: "#94A3B8" }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Video area */}
+      <div className="relative" style={{ height: 270, background: "#000" }}>
+        {activeShot?.thumbnail ? (
+          <img
+            src={activeShot.thumbnail}
+            alt=""
+            className="w-full h-full object-cover"
+            draggable={false}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : null}
+        {/* Dark overlay with shot info */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+        {/* Center play/pause button */}
+        {!playing && (
+          <button
+            onClick={onTogglePlay}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-colors"
+          >
+            <Play className="w-8 h-8 text-white ml-1" />
+          </button>
+        )}
+
+        {/* Current shot label */}
+        {activeShot && (
+          <div
+            className="absolute bottom-3 left-4 flex items-center gap-2"
+          >
+            <div className="w-2 h-2 rounded-full" style={{ background: activeStyle.border }} />
+            <span className="text-[12px] font-medium" style={{ color: "#E2E8F0", fontFamily: "Inter, system-ui" }}>
+              {activeShot.name}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Controls bar */}
+      <div
+        className="flex items-center gap-3"
+        style={{ padding: "10px 16px", background: "#1E293B" }}
+      >
+        <button
+          onClick={onTogglePlay}
+          className="flex items-center justify-center rounded-lg hover:bg-white/10"
+          style={{ width: 32, height: 32 }}
+        >
+          {playing ? (
+            <Pause className="w-4 h-4" style={{ color: "#F1F5F9" }} />
+          ) : (
+            <Play className="w-4 h-4" style={{ color: "#F1F5F9" }} />
+          )}
+        </button>
+
+        <span className="text-[12px] font-mono" style={{ color: "#94A3B8", minWidth: 42 }}>
+          {fmtSec(currentTime)}
+        </span>
+
+        {/* Progress bar */}
+        <div
+          className="flex-1 h-1.5 rounded-full cursor-pointer"
+          style={{ background: "#334155" }}
+        >
+          <div
+            className="h-full rounded-full"
+            style={{
+              width: `${progress * 100}%`,
+              background: "linear-gradient(90deg, #22D3EE, #14B8A6)",
+              transition: playing ? "width 0.1s linear" : "none",
+            }}
+          />
+        </div>
+
+        <span className="text-[12px] font-mono" style={{ color: "#94A3B8", minWidth: 42 }}>
+          {fmtSec(totalDuration)}
+        </span>
+      </div>
+
+      {/* Shot strips */}
+      <div
+        className="flex gap-1"
+        style={{ padding: "0 16px 12px 16px" }}
+      >
+        {shots.map((shot) => {
+          const style = CLIP_STYLES[shot.color] ?? CLIP_STYLES.gray;
+          const widthPct = totalDuration > 0 ? (shot.duration / totalDuration) * 100 : 0;
+          const isActive = shot.id === activeShot?.id;
+          return (
+            <div
+              key={shot.id}
+              className="rounded-sm"
+              style={{
+                width: `${widthPct}%`,
+                height: 4,
+                background: style.border,
+                opacity: isActive ? 1 : 0.4,
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );

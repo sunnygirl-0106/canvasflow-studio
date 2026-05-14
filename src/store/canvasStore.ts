@@ -13,7 +13,7 @@ export interface Shot {
   sourceOut: number;
   bindings: string[];
   thumbnail?: string;
-  color: "cyan" | "purple" | "yellow" | "gray";
+  color: "cyan" | "purple" | "yellow" | "rose" | "emerald" | "gray";
   status: ShotStatus;
 }
 
@@ -37,6 +37,7 @@ export interface Edge {
   from: string;
   to: string;
   toHandle?: string;
+  sourceHandle?: string;
   color?: string;
 }
 
@@ -89,11 +90,17 @@ interface State {
   timelineCount: () => number;
 }
 
-const colorFor = (kind: NodeKind): Shot["color"] => {
-  if (kind === "image") return "cyan";
-  if (kind === "generateVideo") return "purple";
-  if (kind === "generateImage") return "yellow";
-  return "gray";
+const SHOT_COLORS: Shot["color"][] = ["cyan", "purple", "yellow", "rose", "emerald"];
+
+const colorByIndex = (index: number): Shot["color"] => SHOT_COLORS[index % SHOT_COLORS.length];
+
+const colorHexMap: Record<Shot["color"], string> = {
+  cyan: "#56C7CF",
+  purple: "#7C3AED",
+  yellow: "#F97316",
+  rose: "#F43F5E",
+  emerald: "#10B981",
+  gray: "#94A3B8",
 };
 
 export const useCanvas = create<State>((set, get) => ({
@@ -273,9 +280,10 @@ export const useCanvas = create<State>((set, get) => ({
     if (!node) return;
     const tl = nodes.find((n) => n.data.shots?.some((sh) => sh.id === shotId));
     if (!tl) return;
+    const shot = tl.data.shots?.find((sh) => sh.id === shotId);
     get().updateShot(tl.id, shotId, {
       bindings: Array.from(new Set([nodeId])),
-      color: colorFor(node.kind),
+      color: shot?.color ?? colorByIndex(shot?.index ?? 0),
       thumbnail: node.data.src,
       status: "ready",
     });
@@ -316,21 +324,19 @@ export const useCanvas = create<State>((set, get) => ({
           sourceOut: n.data.duration ?? 3,
           bindings: [n.id],
           thumbnail: n.data.src,
-          color: colorFor(n.kind),
+          color: colorByIndex(i),
           status: "ready" as const,
         })),
       },
     };
 
-    const colorHex = (c: Shot["color"]) =>
-      c === "cyan" ? "#56C7CF" : c === "purple" ? "#7C3AED" : c === "yellow" ? "#F97316" : "#94A3B8";
-
     const newEdges: Edge[] = picked.map((n, i) => ({
       id: `e-${ts}-${i}`,
       from: n.id,
       to: tlId,
+      sourceHandle: "source-timeline",
       toHandle: `shot-${ts}-${i}`,
-      color: colorHex(colorFor(n.kind)),
+      color: colorHexMap[colorByIndex(i)],
     }));
 
     set((s) => ({
@@ -373,18 +379,17 @@ export const useCanvas = create<State>((set, get) => ({
       sourceOut: node.data.duration ?? 3,
       bindings: [node.id],
       thumbnail: node.data.src,
-      color: colorFor(node.kind),
+      color: colorByIndex(idx),
       status: "ready",
     };
 
-    const colorHex = (c: Shot["color"]) =>
-      c === "cyan" ? "#56C7CF" : c === "purple" ? "#7C3AED" : c === "yellow" ? "#F97316" : "#94A3B8";
     const newEdge: Edge = {
       id: `e-${ts}`,
       from: node.id,
       to: tlId,
+      sourceHandle: "source-timeline",
       toHandle: shotId,
-      color: colorHex(colorFor(node.kind)),
+      color: colorHexMap[colorByIndex(idx)],
     };
 
     set((s) => {
