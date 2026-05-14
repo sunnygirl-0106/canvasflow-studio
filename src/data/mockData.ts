@@ -66,7 +66,7 @@ function mkShot(
 }
 
 export const initialEdges: Edge[] = [
-  { id: "e1", from: "vid-1", to: "tl-1" },
-  { id: "e2", from: "vid-2", to: "tl-1" },
-  { id: "e3", from: "vid-3", to: "tl-1" },
+  { id: "e1", from: "vid-1", to: "tl-1", toHandle: "port-1", color: "#56C7CF" },
+  { id: "e2", from: "vid-2", to: "tl-1", toHandle: "port-2", color: "#7C3AED" },
+  { id: "e3", from: "vid-3", to: "tl-1", toHandle: "port-3", color: "#F97316" },
 ];

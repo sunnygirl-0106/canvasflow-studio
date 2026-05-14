@@ -1,42 +1,65 @@
-import { Plus, Folder, LayoutGrid, History, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Plus, Folder, LayoutGrid, History } from "lucide-react";
+import { AddNodePanel } from "./AddNodePanel";
 
 export function LeftRail() {
-  return (
-    <div
-      className="absolute left-6 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-5 rounded-3xl"
-      style={{
-        padding: "14px 12px",
-        width: 66,
-        background: "#FFFFFFE8",
-        border: "1px solid #D8E1EC",
-        boxShadow: "0 18px 40px rgba(152,162,179,0.15)",
-      }}
-    >
-      {/* Add button */}
-      <button
-        className="flex items-center justify-center rounded-xl"
-        style={{ width: 38, height: 38, background: "#111827" }}
-      >
-        <Plus className="w-5 h-5" style={{ color: "#FFFFFF" }} />
-      </button>
+  const [addOpen, setAddOpen] = useState(false);
 
-      {/* Active asset */}
-      <button
-        className="flex items-center justify-center rounded-[14px]"
+  return (
+    <>
+      <div
+        className="absolute left-6 top-6 z-20 flex flex-col items-center gap-2 rounded-2xl"
         style={{
-          width: 38,
-          height: 38,
-          background: "#ECFDFF",
-          border: "1px solid #B2F0F4",
-          boxShadow: "0 8px 18px rgba(86,199,207,0.12)",
+          padding: 8,
+          width: 56,
+          background: "#FFFFFF",
+          border: "1px solid #E5E7EB",
+          boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
         }}
       >
-        <Folder className="w-5 h-5" style={{ color: "#0F766E" }} />
-      </button>
+        {/* Add button (dark filled, ring when active) */}
+        <button
+          data-add-toggle
+          onClick={() => setAddOpen((v) => !v)}
+          className="flex items-center justify-center rounded-xl transition-shadow"
+          style={{
+            width: 40,
+            height: 40,
+            background: "#0F172A",
+            boxShadow: addOpen
+              ? "0 0 0 3px #FFFFFF, 0 0 0 5px #3B82F6"
+              : "none",
+          }}
+        >
+          <Plus className="w-5 h-5" style={{ color: "#FFFFFF" }} strokeWidth={2.5} />
+        </button>
 
-      <LayoutGrid className="w-[22px] h-[22px]" style={{ color: "#667085" }} />
-      <History className="w-[22px] h-[22px]" style={{ color: "#667085" }} />
-      <Trash2 className="w-[22px] h-[22px]" style={{ color: "#667085" }} />
-    </div>
+        {/* Folder */}
+        <button
+          className="flex items-center justify-center rounded-xl hover:bg-slate-50"
+          style={{ width: 40, height: 40 }}
+        >
+          <Folder className="w-[20px] h-[20px]" style={{ color: "#64748B" }} strokeWidth={1.8} />
+        </button>
+
+        {/* Grid */}
+        <button
+          className="flex items-center justify-center rounded-xl hover:bg-slate-50"
+          style={{ width: 40, height: 40 }}
+        >
+          <LayoutGrid className="w-[20px] h-[20px]" style={{ color: "#64748B" }} strokeWidth={1.8} />
+        </button>
+
+        {/* History */}
+        <button
+          className="flex items-center justify-center rounded-xl hover:bg-slate-50"
+          style={{ width: 40, height: 40 }}
+        >
+          <History className="w-[20px] h-[20px]" style={{ color: "#64748B" }} strokeWidth={1.8} />
+        </button>
+      </div>
+
+      <AddNodePanel open={addOpen} onClose={() => setAddOpen(false)} />
+    </>
   );
 }

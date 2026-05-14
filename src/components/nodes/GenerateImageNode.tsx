@@ -2,6 +2,7 @@ import { Handle, Position } from "@xyflow/react";
 import { useState } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import { useCanvas, type CanvasNode } from "@/store/canvasStore";
+import { NodeHandleHint } from "@/components/NodeHandleHint";
 
 export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
   const updateNode = useCanvas((s) => s.updateNode);
@@ -17,9 +18,9 @@ export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["
   };
 
   return (
-    <div className="w-[240px] h-[160px] rounded-xl bg-card border-2 border-dashed border-border node-shadow overflow-hidden fade-in flex flex-col">
+    <div className="group relative w-[240px] h-[160px] rounded-xl bg-card border-2 border-dashed border-border node-shadow overflow-visible fade-in flex flex-col">
       <Handle type="target" position={Position.Left} id="in" />
-      <div className="flex-1 bg-secondary/30 overflow-hidden flex items-center justify-center text-muted-foreground text-[11px] text-center px-3">
+      <div className="flex-1 bg-secondary/30 overflow-hidden rounded-t-[10px] flex items-center justify-center text-muted-foreground text-[11px] text-center px-3">
         {data.src ? (
           <img src={data.src} alt="" className="w-full h-full object-cover" draggable={false} />
         ) : (
@@ -32,11 +33,12 @@ export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["
       <button
         onClick={generate}
         disabled={busy}
-        className="text-xs py-1.5 bg-primary/30 hover:bg-primary/50 text-foreground border-t border-border flex items-center justify-center gap-1.5 transition-colors"
+        className="text-xs py-1.5 bg-primary/30 hover:bg-primary/50 text-foreground border-t border-border flex items-center justify-center gap-1.5 transition-colors rounded-b-[10px]"
       >
         {busy ? <><Loader2 className="w-3 h-3 animate-spin" />生成中…</> : <><Sparkles className="w-3 h-3" />生成</>}
       </button>
       <Handle type="source" position={Position.Right} id="out" />
+      <NodeHandleHint />
     </div>
   );
 }

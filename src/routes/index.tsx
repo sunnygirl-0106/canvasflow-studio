@@ -4,7 +4,6 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
-  Controls,
   ReactFlowProvider,
   useReactFlow,
   type Node as RFNode,
@@ -25,6 +24,9 @@ import { GenerateImageNode } from "@/components/nodes/GenerateImageNode";
 import { GenerateVideoNode } from "@/components/nodes/GenerateVideoNode";
 import { TimelineNode } from "@/components/nodes/TimelineNode";
 import { LeftRail } from "@/components/LeftRail";
+import { MultiSelectionCTA } from "@/components/MultiSelectionCTA";
+import { TimelineCoachToast } from "@/components/TimelineCoachToast";
+import { ContextMenu } from "@/components/ContextMenu";
 import { Wand2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({ component: IndexPage });
@@ -46,6 +48,8 @@ function Workspace() {
         <LeftRail />
         <BottomDock />
         <PropertiesPanel />
+        <TimelineCoachToast />
+        <ContextMenu />
         <DemoButton />
       </div>
       <ExportDialog />
@@ -69,6 +73,7 @@ function Canvas() {
   const removeEdgeFn = useCanvas((s) => s.removeEdge);
   const undo = useCanvas((s) => s.undo);
   const redo = useCanvas((s) => s.redo);
+  const setContextMenu = useCanvas((s) => s.setContextMenu);
 
   const rfNodes = useMemo<RFNode[]>(
     () =>
@@ -88,11 +93,12 @@ function Canvas() {
       edges.map((e) => ({
         id: e.id,
         source: e.from,
+        sourceHandle: "out",
         target: findHostNodeId(nodes, e.to),
-        targetHandle: isShotId(nodes, e.to) ? e.to : undefined,
+        targetHandle: e.toHandle ?? (isShotId(nodes, e.to) ? e.to : undefined),
         type: "default",
         animated: true,
-        style: { stroke: "#5cdcfa", strokeWidth: 2 },
+        style: { stroke: e.color ?? "#56C7CF", strokeWidth: 2 },
       })),
     [edges, nodes],
   );
@@ -139,7 +145,23 @@ function Canvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onPaneClick={() => select(null)}
+        onPaneClick={() => {
+          select(null);
+          setContextMenu(null);
+        }}
+        onPaneContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenu({
+            x: "clientX" in e ? e.clientX : 0,
+            y: "clientY" in e ? e.clientY : 0,
+            targetNodeId: null,
+          });
+        }}
+        onNodeContextMenu={(e, node) => {
+          e.preventDefault();
+          select(node.id);
+          setContextMenu({ x: e.clientX, y: e.clientY, targetNodeId: node.id });
+        }}
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 0.9 }}
         minZoom={0.2}
@@ -149,8 +171,8 @@ function Canvas() {
         panOnDrag={[1, 2]}
         selectionOnDrag
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(255,255,255,0.06)" />
-        <Controls className="!bg-card !border-border" showInteractive={false} />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(15,23,42,0.10)" />
+        <MultiSelectionCTA />
       </ReactFlow>
     </div>
   );

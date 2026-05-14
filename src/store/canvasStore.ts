@@ -36,9 +36,18 @@ export interface Edge {
   id: string;
   from: string;
   to: string;
+  toHandle?: string;
+  color?: string;
 }
 
 type Snapshot = { nodes: CanvasNode[]; edges: Edge[] };
+
+export interface ContextMenuState {
+  x: number;
+  y: number;
+  /** null = right-clicked on empty pane */
+  targetNodeId: string | null;
+}
 
 interface State {
   projectName: string;
@@ -48,6 +57,7 @@ interface State {
   selectedShotId: string | null;
   panelOpen: boolean;
   exportOpen: false | "fcpxml" | "edl";
+  contextMenu: ContextMenuState | null;
   past: Snapshot[];
   future: Snapshot[];
   setProjectName: (n: string) => void;
@@ -70,6 +80,9 @@ interface State {
   removeShot: (timelineId: string, shotId: string) => void;
   reorderShots: (timelineId: string, ids: string[]) => void;
   bindNodeToShot: (nodeId: string, shotId: string) => void;
+  mergeSelectionToTimeline: (nodeIds: string[]) => string | null;
+  addNodeToTimeline: (nodeId: string) => string | null;
+  setContextMenu: (m: ContextMenuState | null) => void;
   // computed
   totalDuration: () => number;
   shotCount: () => number;
@@ -91,6 +104,7 @@ export const useCanvas = create<State>((set, get) => ({
   selectedShotId: null,
   panelOpen: false,
   exportOpen: false,
+  contextMenu: null,
   past: [],
   future: [],
 
@@ -267,6 +281,148 @@ export const useCanvas = create<State>((set, get) => ({
     });
   },
 
+  mergeSelectionToTimeline: (nodeIds) => {
+    const { nodes } = get();
+    // Only media kinds can become shots
+    const mediaKinds: NodeKind[] = ["image", "generateImage", "generateVideo"];
+    const picked = nodes
+      .filter((n) => nodeIds.includes(n.id) && mediaKinds.includes(n.kind))
+      // left-to-right order, then top-to-bottom
+      .sort((a, b) => a.x - b.x || a.y - b.y);
+    if (picked.length < 2) return null;
+
+    get().pushHistory();
+
+    const ts = Date.now();
+    const tlId = `timeline-${ts}`;
+    // Position below the selection
+    const minX = Math.min(...picked.map((n) => n.x));
+    const maxY = Math.max(...picked.map((n) => n.y));
+    const tlNode: CanvasNode = {
+      id: tlId,
+      kind: "timeline",
+      x: minX,
+      y: maxY + 240,
+      data: {
+        name: `时间线 ${get().nodes.filter((n) => n.kind === "timeline").length + 1}`,
+        width: Math.max(1200, picked.length * 320),
+        pxPerSecond: 60,
+        shots: picked.map((n, i) => ({
+          id: `shot-${ts}-${i}`,
+          name: `${n.data.name ?? "Shot"} · ${String(i + 1).padStart(2, "0")}`,
+          index: i,
+          duration: n.data.duration ?? 3,
+          sourceIn: 0,
+          sourceOut: n.data.duration ?? 3,
+          bindings: [n.id],
+          thumbnail: n.data.src,
+          color: colorFor(n.kind),
+          status: "ready" as const,
+        })),
+      },
+    };
+
+    const colorHex = (c: Shot["color"]) =>
+      c === "cyan" ? "#56C7CF" : c === "purple" ? "#7C3AED" : c === "yellow" ? "#F97316" : "#94A3B8";
+
+    const newEdges: Edge[] = picked.map((n, i) => ({
+      id: `e-${ts}-${i}`,
+      from: n.id,
+      to: tlId,
+      toHandle: `shot-${ts}-${i}`,
+      color: colorHex(colorFor(n.kind)),
+    }));
+
+    set((s) => ({
+      nodes: [...s.nodes, tlNode],
+      edges: [...s.edges, ...newEdges],
+      selectedId: tlId,
+      selectedShotId: null,
+      panelOpen: true,
+    }));
+    return tlId;
+  },
+
+  /**
+   * Append a single media node to the most-recently-created timeline as a new shot.
+   * If no timeline exists yet, create one on the fly with this node as the first shot.
+   */
+  addNodeToTimeline: (nodeId) => {
+    const { nodes } = get();
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return null;
+    const mediaKinds: NodeKind[] = ["image", "generateImage", "generateVideo"];
+    if (!mediaKinds.includes(node.kind)) return null;
+
+    get().pushHistory();
+
+    const timelines = nodes.filter((n) => n.kind === "timeline");
+    const existingTl = timelines[timelines.length - 1] ?? null;
+    const ts = Date.now();
+    const tlId = existingTl?.id ?? `timeline-${ts}`;
+
+    const baseShots = existingTl?.data.shots ?? [];
+    const idx = baseShots.length;
+    const shotId = `shot-${ts}-${idx}`;
+    const newShot: Shot = {
+      id: shotId,
+      name: `${node.data.name ?? "Shot"} · ${String(idx + 1).padStart(2, "0")}`,
+      index: idx,
+      duration: node.data.duration ?? 3,
+      sourceIn: 0,
+      sourceOut: node.data.duration ?? 3,
+      bindings: [node.id],
+      thumbnail: node.data.src,
+      color: colorFor(node.kind),
+      status: "ready",
+    };
+
+    const colorHex = (c: Shot["color"]) =>
+      c === "cyan" ? "#56C7CF" : c === "purple" ? "#7C3AED" : c === "yellow" ? "#F97316" : "#94A3B8";
+    const newEdge: Edge = {
+      id: `e-${ts}`,
+      from: node.id,
+      to: tlId,
+      toHandle: shotId,
+      color: colorHex(colorFor(node.kind)),
+    };
+
+    set((s) => {
+      let nextNodes: CanvasNode[];
+      if (existingTl) {
+        nextNodes = s.nodes.map((n) =>
+          n.id === tlId
+            ? { ...n, data: { ...n.data, shots: [...(n.data.shots ?? []), newShot] } }
+            : n,
+        );
+      } else {
+        const newTl: CanvasNode = {
+          id: tlId,
+          kind: "timeline",
+          x: node.x,
+          y: node.y + 240,
+          data: {
+            name: `时间线 ${s.nodes.filter((n) => n.kind === "timeline").length + 1}`,
+            width: 1200,
+            pxPerSecond: 60,
+            shots: [newShot],
+          },
+        };
+        nextNodes = [...s.nodes, newTl];
+      }
+      return {
+        nodes: nextNodes,
+        edges: [...s.edges, newEdge],
+        selectedId: tlId,
+        selectedShotId: null,
+        panelOpen: true,
+      };
+    });
+    return tlId;
+  },
+
+  setContextMenu: (m) => set({ contextMenu: m }),
+
   totalDuration: () =>
     get()
       .nodes.filter((n) => n.kind === "timeline")
@@ -285,8 +441,3 @@ function findShot(nodes: CanvasNode[], id: string): Shot | undefined {
   }
 }
 
-export function fmtTime(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
