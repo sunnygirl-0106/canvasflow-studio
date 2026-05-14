@@ -1,58 +1,72 @@
-import { useCanvas, fmtTime } from "@/store/canvasStore";
-import { Share2, Wallet, FileDown, FileText } from "lucide-react";
+import { useCanvas } from "@/store/canvasStore";
+import { Save, Share2, Bell, ShoppingBag, User } from "lucide-react";
 
 export function Toolbar() {
   const projectName = useCanvas((s) => s.projectName);
   const setProjectName = useCanvas((s) => s.setProjectName);
-  const setExport = useCanvas((s) => s.setExport);
-  const tlCount = useCanvas((s) => s.timelineCount());
-  const shotCount = useCanvas((s) => s.shotCount());
-  const edgeCount = useCanvas((s) => s.edges.length);
-  const total = useCanvas((s) => s.totalDuration());
 
   return (
-    <header className="frosted h-12 px-4 flex items-center gap-4 border-b border-border z-30 relative">
+    <header
+      className="h-16 px-6 flex items-center justify-between z-30 relative"
+      style={{ background: "#F8FAFC" }}
+    >
+      {/* Left: Brand */}
+      <div className="flex items-center gap-4 h-full">
+        <div className="flex items-center gap-2">
+          <div className="w-[42px] h-[42px] rounded-xl bg-[#111827] flex items-center justify-center">
+            <span className="text-white text-lg font-bold">P</span>
+          </div>
+          <span
+            className="text-[28px] font-bold"
+            style={{ color: "#101828", fontFamily: "Avenir Next, Inter, system-ui" }}
+          >
+            PhanMovie
+          </span>
+        </div>
+
+        <div className="w-px h-6" style={{ background: "#D9E0EA" }} />
+
+        <span className="text-lg font-medium" style={{ color: "#667085", fontFamily: "PingFang SC, Inter, system-ui" }}>
+          视频生成
+        </span>
+      </div>
+
+      {/* Right: Actions */}
       <div className="flex items-center gap-3">
-        <div className="text-base font-bold tracking-tight">
-          <span className="text-accent">Work</span>
-          <span className="text-foreground">Buddy</span>
-        </div>
-        <input
-          value={projectName}
-          onChange={(e) => setProjectName(e.target.value)}
-          className="bg-transparent text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/40 rounded px-2 py-1 outline-none focus:bg-secondary/60 focus:text-foreground w-44"
-        />
-      </div>
+        <ActionBtn icon={Save} />
+        <ActionBtn icon={Share2} />
+        <ActionBtn icon={Bell} badge />
 
-      <div className="flex-1 flex justify-center">
-        <div className="text-xs text-muted-foreground bg-secondary/40 rounded-full px-4 py-1.5 border border-border/60">
-          <span className="text-foreground font-medium">{tlCount}</span> 条时间线 ·{" "}
-          <span className="text-foreground font-medium">{shotCount}</span> 个片段 ·{" "}
-          <span className="text-foreground font-medium">{edgeCount}</span> 条连线 · 总时长{" "}
-          <span className="text-accent font-mono font-semibold">{fmtTime(total)}</span>
-        </div>
-      </div>
+        <button
+          className="flex items-center gap-2 rounded-[18px] h-14 px-4"
+          style={{ background: "#ECFDFF", border: "1px solid #B2F0F4" }}
+        >
+          <ShoppingBag className="w-5 h-5" style={{ color: "#0F766E" }} />
+          <span className="text-sm font-medium" style={{ color: "#0F766E" }}>商店</span>
+        </button>
 
-      <div className="flex items-center gap-2">
         <button
-          onClick={() => setExport("fcpxml")}
-          className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary/60 hover:bg-secondary text-foreground transition-colors"
+          className="flex items-center gap-2.5 rounded-[18px] h-14 px-4"
+          style={{ background: "#FFFFFF", border: "1px solid #D8E1EC" }}
         >
-          <FileDown className="w-3.5 h-3.5" /> 导出 FCPXML
-        </button>
-        <button
-          onClick={() => setExport("edl")}
-          className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary/60 hover:bg-secondary text-foreground transition-colors"
-        >
-          <FileText className="w-3.5 h-3.5" /> 导出 EDL
-        </button>
-        <button className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary/60 hover:bg-secondary text-foreground transition-colors">
-          <Share2 className="w-3.5 h-3.5" /> 分享
-        </button>
-        <button className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity">
-          <Wallet className="w-3.5 h-3.5" /> 充值
+          <User className="w-5 h-5" style={{ color: "#667085" }} />
+          <span className="text-sm font-medium" style={{ color: "#344054" }}>账户</span>
         </button>
       </div>
     </header>
+  );
+}
+
+function ActionBtn({ icon: Icon, badge }: { icon: any; badge?: boolean }) {
+  return (
+    <button
+      className="relative flex items-center justify-center rounded-[18px] w-14 h-14"
+      style={{ background: "#FFFFFF", border: "1px solid #D8E1EC" }}
+    >
+      <Icon className="w-5 h-5" style={{ color: "#667085" }} />
+      {badge && (
+        <div className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white" />
+      )}
+    </button>
   );
 }

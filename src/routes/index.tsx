@@ -24,6 +24,7 @@ import { ImageNode } from "@/components/nodes/ImageNode";
 import { GenerateImageNode } from "@/components/nodes/GenerateImageNode";
 import { GenerateVideoNode } from "@/components/nodes/GenerateVideoNode";
 import { TimelineNode } from "@/components/nodes/TimelineNode";
+import { LeftRail } from "@/components/LeftRail";
 import { Wand2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({ component: IndexPage });
@@ -42,6 +43,7 @@ function Workspace() {
       <Toolbar />
       <div className="flex-1 relative">
         <Canvas />
+        <LeftRail />
         <BottomDock />
         <PropertiesPanel />
         <DemoButton />
