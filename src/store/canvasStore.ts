@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { initialNodes, initialEdges } from "@/data/mockData";
 
-export type NodeKind = "image" | "generateImage" | "generateVideo" | "timeline";
+export type NodeKind = "image" | "generateImage" | "generateVideo" | "composition";
 export type ShotStatus = "empty" | "ready" | "generating" | "failed";
 
 export interface Shot {
@@ -9,6 +9,8 @@ export interface Shot {
   name: string;
   index: number;
   duration: number;
+  baseDuration: number;
+  speed: number;
   sourceIn: number;
   sourceOut: number;
   bindings: string[];
@@ -61,6 +63,12 @@ interface State {
   contextMenu: ContextMenuState | null;
   past: Snapshot[];
   future: Snapshot[];
+
+  // editor state
+  editorCompId: string | null;
+  editorMode: "full" | "collapsed";
+  selectedClipId: string | null;
+
   setProjectName: (n: string) => void;
   pushHistory: () => void;
   undo: () => void;
@@ -76,18 +84,30 @@ interface State {
   togglePanel: (open?: boolean) => void;
   setExport: (v: State["exportOpen"]) => void;
   // shot helpers
-  updateShot: (timelineId: string, shotId: string, patch: Partial<Shot>) => void;
-  addShot: (timelineId: string) => void;
-  removeShot: (timelineId: string, shotId: string) => void;
-  reorderShots: (timelineId: string, ids: string[]) => void;
+  updateShot: (compId: string, shotId: string, patch: Partial<Shot>) => void;
+  addShot: (compId: string) => void;
+  removeShot: (compId: string, shotId: string) => void;
+  reorderShots: (compId: string, ids: string[]) => void;
   bindNodeToShot: (nodeId: string, shotId: string) => void;
-  mergeSelectionToTimeline: (nodeIds: string[]) => string | null;
-  addNodeToTimeline: (nodeId: string) => string | null;
+  mergeToComposition: (nodeIds: string[]) => string | null;
+  addToComposition: (nodeId: string) => string | null;
   setContextMenu: (m: ContextMenuState | null) => void;
+
+  // editor actions
+  openComposition: (id: string) => void;
+  closeComposition: () => void;
+  setEditorMode: (m: "full" | "collapsed") => void;
+  selectClip: (id: string | null) => void;
+
+  // clip operations
+  splitClip: (compId: string, clipId: string, atSec: number) => void;
+  cropClip: (compId: string, clipId: string, side: "left" | "right", atSec: number) => void;
+  setClipSpeed: (compId: string, clipId: string, speed: number) => void;
+
   // computed
   totalDuration: () => number;
   shotCount: () => number;
-  timelineCount: () => number;
+  compositionCount: () => number;
 }
 
 const SHOT_COLORS: Shot["color"][] = ["cyan", "purple", "yellow", "rose", "emerald"];
@@ -114,6 +134,11 @@ export const useCanvas = create<State>((set, get) => ({
   contextMenu: null,
   past: [],
   future: [],
+
+  // editor state
+  editorCompId: null,
+  editorMode: "full",
+  selectedClipId: null,
 
   setProjectName: (n) => set({ projectName: n }),
 
@@ -168,8 +193,8 @@ export const useCanvas = create<State>((set, get) => ({
       y: center.y,
       data: {
         name:
-          kind === "timeline"
-            ? `时间线 ${get().nodes.filter((n) => n.kind === "timeline").length + 1}`
+          kind === "composition"
+            ? `视频合成 ${get().nodes.filter((n) => n.kind === "composition").length + 1}`
             : kind === "image"
               ? "新图片"
               : kind === "generateImage"
@@ -178,7 +203,7 @@ export const useCanvas = create<State>((set, get) => ({
       },
     };
     if (kind === "image") base.data.src = `https://picsum.photos/seed/${seed}/400/225`;
-    if (kind === "timeline") {
+    if (kind === "composition") {
       base.data.width = 1200;
       base.data.pxPerSecond = 60;
       base.data.shots = [];
@@ -214,10 +239,10 @@ export const useCanvas = create<State>((set, get) => ({
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
   setExport: (v) => set({ exportOpen: v }),
 
-  updateShot: (timelineId, shotId, patch) =>
+  updateShot: (compId, shotId, patch) =>
     set((s) => ({
       nodes: s.nodes.map((n) =>
-        n.id === timelineId
+        n.id === compId
           ? {
               ...n,
               data: {
@@ -229,11 +254,11 @@ export const useCanvas = create<State>((set, get) => ({
       ),
     })),
 
-  addShot: (timelineId) => {
+  addShot: (compId) => {
     get().pushHistory();
     set((s) => ({
       nodes: s.nodes.map((n) => {
-        if (n.id !== timelineId) return n;
+        if (n.id !== compId) return n;
         const shots = n.data.shots ?? [];
         const idx = shots.length;
         const newShot: Shot = {
@@ -241,6 +266,8 @@ export const useCanvas = create<State>((set, get) => ({
           name: `Shot ${String(idx + 1).padStart(2, "0")}`,
           index: idx,
           duration: 3,
+          baseDuration: 3,
+          speed: 1,
           sourceIn: 0,
           sourceOut: 3,
           bindings: [],
@@ -252,11 +279,11 @@ export const useCanvas = create<State>((set, get) => ({
     }));
   },
 
-  removeShot: (timelineId, shotId) => {
+  removeShot: (compId, shotId) => {
     get().pushHistory();
     set((s) => ({
       nodes: s.nodes.map((n) =>
-        n.id === timelineId
+        n.id === compId
           ? { ...n, data: { ...n.data, shots: (n.data.shots ?? []).filter((sh) => sh.id !== shotId) } }
           : n,
       ),
@@ -264,10 +291,10 @@ export const useCanvas = create<State>((set, get) => ({
     }));
   },
 
-  reorderShots: (timelineId, ids) =>
+  reorderShots: (compId, ids) =>
     set((s) => ({
       nodes: s.nodes.map((n) => {
-        if (n.id !== timelineId) return n;
+        if (n.id !== compId) return n;
         const map = new Map((n.data.shots ?? []).map((sh) => [sh.id, sh]));
         const next = ids.map((id, i) => ({ ...(map.get(id) as Shot), index: i }));
         return { ...n, data: { ...n.data, shots: next } };
@@ -278,10 +305,10 @@ export const useCanvas = create<State>((set, get) => ({
     const { nodes } = get();
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
-    const tl = nodes.find((n) => n.data.shots?.some((sh) => sh.id === shotId));
-    if (!tl) return;
-    const shot = tl.data.shots?.find((sh) => sh.id === shotId);
-    get().updateShot(tl.id, shotId, {
+    const comp = nodes.find((n) => n.data.shots?.some((sh) => sh.id === shotId));
+    if (!comp) return;
+    const shot = comp.data.shots?.find((sh) => sh.id === shotId);
+    get().updateShot(comp.id, shotId, {
       bindings: Array.from(new Set([nodeId])),
       color: shot?.color ?? colorByIndex(shot?.index ?? 0),
       thumbnail: node.data.src,
@@ -289,71 +316,71 @@ export const useCanvas = create<State>((set, get) => ({
     });
   },
 
-  mergeSelectionToTimeline: (nodeIds) => {
+  mergeToComposition: (nodeIds) => {
     const { nodes } = get();
-    // Only media kinds can become shots
     const mediaKinds: NodeKind[] = ["image", "generateImage", "generateVideo"];
     const picked = nodes
       .filter((n) => nodeIds.includes(n.id) && mediaKinds.includes(n.kind))
-      // left-to-right order, then top-to-bottom
       .sort((a, b) => a.x - b.x || a.y - b.y);
     if (picked.length < 2) return null;
 
     get().pushHistory();
 
     const ts = Date.now();
-    const tlId = `timeline-${ts}`;
-    // Position below the selection
-    const minX = Math.min(...picked.map((n) => n.x));
+    const compId = `composition-${ts}`;
+    // Position to the right of the selection
+    const maxX = Math.max(...picked.map((n) => n.x));
+    const minY = Math.min(...picked.map((n) => n.y));
     const maxY = Math.max(...picked.map((n) => n.y));
-    const tlNode: CanvasNode = {
-      id: tlId,
-      kind: "timeline",
-      x: minX,
-      y: maxY + 240,
+    const compNode: CanvasNode = {
+      id: compId,
+      kind: "composition",
+      x: maxX + 400,
+      y: (minY + maxY) / 2,
       data: {
-        name: `时间线 ${get().nodes.filter((n) => n.kind === "timeline").length + 1}`,
+        name: `视频合成 ${get().nodes.filter((n) => n.kind === "composition").length + 1}`,
         width: Math.max(1200, picked.length * 320),
         pxPerSecond: 60,
-        shots: picked.map((n, i) => ({
-          id: `shot-${ts}-${i}`,
-          name: `${n.data.name ?? "Shot"} · ${String(i + 1).padStart(2, "0")}`,
-          index: i,
-          duration: n.data.duration ?? 3,
-          sourceIn: 0,
-          sourceOut: n.data.duration ?? 3,
-          bindings: [n.id],
-          thumbnail: n.data.src,
-          color: colorByIndex(i),
-          status: "ready" as const,
-        })),
+        shots: picked.map((n, i) => {
+          const dur = n.data.duration ?? 3;
+          return {
+            id: `shot-${ts}-${i}`,
+            name: `${n.data.name ?? "Shot"} · ${String(i + 1).padStart(2, "0")}`,
+            index: i,
+            duration: dur,
+            baseDuration: dur,
+            speed: 1,
+            sourceIn: 0,
+            sourceOut: dur,
+            bindings: [n.id],
+            thumbnail: n.data.src,
+            color: colorByIndex(i),
+            status: "ready" as const,
+          };
+        }),
       },
     };
 
     const newEdges: Edge[] = picked.map((n, i) => ({
       id: `e-${ts}-${i}`,
       from: n.id,
-      to: tlId,
-      sourceHandle: "source-timeline",
-      toHandle: `shot-${ts}-${i}`,
+      to: compId,
+      sourceHandle: "source-process",
+      toHandle: "comp-in",
       color: colorHexMap[colorByIndex(i)],
     }));
 
     set((s) => ({
-      nodes: [...s.nodes, tlNode],
+      nodes: [...s.nodes, compNode],
       edges: [...s.edges, ...newEdges],
-      selectedId: tlId,
+      selectedId: compId,
       selectedShotId: null,
       panelOpen: true,
     }));
-    return tlId;
+    return compId;
   },
 
-  /**
-   * Append a single media node to the most-recently-created timeline as a new shot.
-   * If no timeline exists yet, create one on the fly with this node as the first shot.
-   */
-  addNodeToTimeline: (nodeId) => {
+  addToComposition: (nodeId) => {
     const { nodes } = get();
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return null;
@@ -362,21 +389,24 @@ export const useCanvas = create<State>((set, get) => ({
 
     get().pushHistory();
 
-    const timelines = nodes.filter((n) => n.kind === "timeline");
-    const existingTl = timelines[timelines.length - 1] ?? null;
+    const compositions = nodes.filter((n) => n.kind === "composition");
+    const existingComp = compositions[compositions.length - 1] ?? null;
     const ts = Date.now();
-    const tlId = existingTl?.id ?? `timeline-${ts}`;
+    const compId = existingComp?.id ?? `composition-${ts}`;
 
-    const baseShots = existingTl?.data.shots ?? [];
+    const baseShots = existingComp?.data.shots ?? [];
     const idx = baseShots.length;
     const shotId = `shot-${ts}-${idx}`;
+    const dur = node.data.duration ?? 3;
     const newShot: Shot = {
       id: shotId,
       name: `${node.data.name ?? "Shot"} · ${String(idx + 1).padStart(2, "0")}`,
       index: idx,
-      duration: node.data.duration ?? 3,
+      duration: dur,
+      baseDuration: dur,
+      speed: 1,
       sourceIn: 0,
-      sourceOut: node.data.duration ?? 3,
+      sourceOut: dur,
       bindings: [node.id],
       thumbnail: node.data.src,
       color: colorByIndex(idx),
@@ -386,57 +416,168 @@ export const useCanvas = create<State>((set, get) => ({
     const newEdge: Edge = {
       id: `e-${ts}`,
       from: node.id,
-      to: tlId,
-      sourceHandle: "source-timeline",
-      toHandle: shotId,
+      to: compId,
+      sourceHandle: "source-process",
+      toHandle: "comp-in",
       color: colorHexMap[colorByIndex(idx)],
     };
 
     set((s) => {
       let nextNodes: CanvasNode[];
-      if (existingTl) {
+      if (existingComp) {
         nextNodes = s.nodes.map((n) =>
-          n.id === tlId
+          n.id === compId
             ? { ...n, data: { ...n.data, shots: [...(n.data.shots ?? []), newShot] } }
             : n,
         );
       } else {
-        const newTl: CanvasNode = {
-          id: tlId,
-          kind: "timeline",
-          x: node.x,
-          y: node.y + 240,
+        const newComp: CanvasNode = {
+          id: compId,
+          kind: "composition",
+          x: node.x + 400,
+          y: node.y,
           data: {
-            name: `时间线 ${s.nodes.filter((n) => n.kind === "timeline").length + 1}`,
+            name: `视频合成 ${s.nodes.filter((n) => n.kind === "composition").length + 1}`,
             width: 1200,
             pxPerSecond: 60,
             shots: [newShot],
           },
         };
-        nextNodes = [...s.nodes, newTl];
+        nextNodes = [...s.nodes, newComp];
       }
       return {
         nodes: nextNodes,
         edges: [...s.edges, newEdge],
-        selectedId: tlId,
+        selectedId: compId,
         selectedShotId: null,
         panelOpen: true,
       };
     });
-    return tlId;
+    return compId;
   },
 
   setContextMenu: (m) => set({ contextMenu: m }),
 
+  // editor actions
+  openComposition: (id) => set({ editorCompId: id, editorMode: "full", selectedClipId: null }),
+  closeComposition: () => set({ editorCompId: null, selectedClipId: null }),
+  setEditorMode: (m) => set({ editorMode: m }),
+  selectClip: (id) => set({ selectedClipId: id }),
+
+  // clip operations
+  splitClip: (compId, clipId, atSec) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== compId) return n;
+        const shots = n.data.shots ?? [];
+        const idx = shots.findIndex((sh) => sh.id === clipId);
+        if (idx === -1) return n;
+        const clip = shots[idx];
+
+        // atSec is relative to the start of this clip
+        if (atSec <= 0 || atSec >= clip.duration) return n;
+
+        const leftDuration = atSec;
+        const rightDuration = clip.duration - atSec;
+        const leftBaseDuration = leftDuration * clip.speed;
+        const rightBaseDuration = rightDuration * clip.speed;
+
+        const left: Shot = {
+          ...clip,
+          duration: leftDuration,
+          baseDuration: leftBaseDuration,
+          sourceOut: clip.sourceIn + leftBaseDuration,
+        };
+        const right: Shot = {
+          ...clip,
+          id: `${clip.id}-split-${Date.now()}`,
+          name: `${clip.name} (2)`,
+          duration: rightDuration,
+          baseDuration: rightBaseDuration,
+          sourceIn: clip.sourceIn + leftBaseDuration,
+        };
+
+        const nextShots = [...shots.slice(0, idx), left, right, ...shots.slice(idx + 1)];
+        // Re-index
+        nextShots.forEach((sh, i) => (sh.index = i));
+        return { ...n, data: { ...n.data, shots: nextShots } };
+      }),
+    }));
+  },
+
+  cropClip: (compId, clipId, side, atSec) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== compId) return n;
+        const shots = n.data.shots ?? [];
+        const idx = shots.findIndex((sh) => sh.id === clipId);
+        if (idx === -1) return n;
+        const clip = shots[idx];
+
+        // atSec is relative to the start of this clip
+        if (atSec <= 0 || atSec >= clip.duration) return n;
+
+        let updated: Shot;
+        if (side === "right") {
+          // Keep left side, crop right
+          const newDuration = atSec;
+          const newBaseDuration = newDuration * clip.speed;
+          updated = {
+            ...clip,
+            duration: newDuration,
+            baseDuration: newBaseDuration,
+            sourceOut: clip.sourceIn + newBaseDuration,
+          };
+        } else {
+          // Keep right side, crop left
+          const newDuration = clip.duration - atSec;
+          const newBaseDuration = newDuration * clip.speed;
+          updated = {
+            ...clip,
+            duration: newDuration,
+            baseDuration: newBaseDuration,
+            sourceIn: clip.sourceOut - newBaseDuration,
+          };
+        }
+
+        const nextShots = shots.map((sh) => (sh.id === clipId ? updated : sh));
+        return { ...n, data: { ...n.data, shots: nextShots } };
+      }),
+    }));
+  },
+
+  setClipSpeed: (compId, clipId, speed) => {
+    if (speed <= 0) return;
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== compId) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            shots: (n.data.shots ?? []).map((sh) => {
+              if (sh.id !== clipId) return sh;
+              const newDuration = sh.baseDuration / speed;
+              return { ...sh, speed, duration: newDuration };
+            }),
+          },
+        };
+      }),
+    }));
+  },
+
   totalDuration: () =>
     get()
-      .nodes.filter((n) => n.kind === "timeline")
+      .nodes.filter((n) => n.kind === "composition")
       .reduce((sum, t) => sum + (t.data.shots ?? []).reduce((a, s) => a + s.duration, 0), 0),
   shotCount: () =>
     get()
-      .nodes.filter((n) => n.kind === "timeline")
+      .nodes.filter((n) => n.kind === "composition")
       .reduce((a, t) => a + (t.data.shots?.length ?? 0), 0),
-  timelineCount: () => get().nodes.filter((n) => n.kind === "timeline").length,
+  compositionCount: () => get().nodes.filter((n) => n.kind === "composition").length,
 }));
 
 function findShot(nodes: CanvasNode[], id: string): Shot | undefined {
@@ -445,4 +586,3 @@ function findShot(nodes: CanvasNode[], id: string): Shot | undefined {
     if (s) return s;
   }
 }
-

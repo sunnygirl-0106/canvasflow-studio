@@ -10,7 +10,7 @@ const MEDIA_KINDS: NodeKind[] = ["image", "generateImage", "generateVideo"];
  * Entry point B: "选中多个素材 → 合并到时间轴"
  */
 export function MultiSelectionCTA() {
-  const merge = useCanvas((s) => s.mergeSelectionToTimeline);
+  const merge = useCanvas((s) => s.mergeToComposition);
   const [selectedMedia, setSelectedMedia] = useState<RFNode[]>([]);
 
   const onChange = useCallback(({ nodes }: { nodes: RFNode[] }) => {
@@ -67,7 +67,7 @@ export function MultiSelectionCTA() {
             className="text-[13px] font-semibold"
             style={{ fontFamily: "PingFang SC, Inter, system-ui" }}
           >
-            合并到时间轴
+            合并到视频合成
           </span>
         </button>
 

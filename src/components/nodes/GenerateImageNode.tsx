@@ -2,7 +2,6 @@ import { Handle, Position } from "@xyflow/react";
 import { useState } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import { useCanvas, type CanvasNode } from "@/store/canvasStore";
-import { NodeHandleHint } from "@/components/NodeHandleHint";
 
 export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
   const updateNode = useCanvas((s) => s.updateNode);
@@ -38,21 +37,6 @@ export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["
         {busy ? <><Loader2 className="w-3 h-3 animate-spin" />生成中…</> : <><Sparkles className="w-3 h-3" />生成</>}
       </button>
       <Handle type="source" position={Position.Right} id="source-process" />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="source-timeline"
-        style={{
-          width: 18,
-          height: 10,
-          borderRadius: "0 0 9px 9px",
-          background: "#F97316",
-          border: "none",
-          bottom: -2,
-          left: "50%",
-        }}
-      />
-      <NodeHandleHint position="bottom" />
     </div>
   );
 }

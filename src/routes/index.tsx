@@ -22,11 +22,12 @@ import { ExportDialog } from "@/components/dialogs/ExportDialog";
 import { ImageNode } from "@/components/nodes/ImageNode";
 import { GenerateImageNode } from "@/components/nodes/GenerateImageNode";
 import { GenerateVideoNode } from "@/components/nodes/GenerateVideoNode";
-import { TimelineNode } from "@/components/nodes/TimelineNode";
+import { CompositionNode } from "@/components/nodes/CompositionNode";
 import { LeftRail } from "@/components/LeftRail";
 import { MultiSelectionCTA } from "@/components/MultiSelectionCTA";
-import { TimelineCoachToast } from "@/components/TimelineCoachToast";
+import { CompositionCoachToast } from "@/components/CompositionCoachToast";
 import { ContextMenu } from "@/components/ContextMenu";
+import { CompositionEditor } from "@/components/composition/CompositionEditor";
 import { Wand2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({ component: IndexPage });
@@ -48,10 +49,11 @@ function Workspace() {
         <LeftRail />
         <BottomDock />
         <PropertiesPanel />
-        <TimelineCoachToast />
+        <CompositionCoachToast />
         <ContextMenu />
         <DemoButton />
       </div>
+      <CompositionEditor />
       <ExportDialog />
     </div>
   );
@@ -61,7 +63,7 @@ const nodeTypes = {
   image: ({ id, data }: any) => <ImageNode data={data} />,
   generateImage: ({ id, data }: any) => <GenerateImageNode id={id} data={data} />,
   generateVideo: ({ id, data }: any) => <GenerateVideoNode id={id} data={data} />,
-  timeline: ({ id, data }: any) => <TimelineNode id={id} data={data} />,
+  composition: ({ id, data }: any) => <CompositionNode id={id} data={data} />,
 };
 
 function Canvas() {
@@ -70,7 +72,7 @@ function Canvas() {
   const updateNode = useCanvas((s) => s.updateNode);
   const select = useCanvas((s) => s.select);
   const addEdgeFn = useCanvas((s) => s.addEdge);
-  const addNodeToTimeline = useCanvas((s) => s.addNodeToTimeline);
+  const addToComposition = useCanvas((s) => s.addToComposition);
   const removeEdgeFn = useCanvas((s) => s.removeEdge);
   const undo = useCanvas((s) => s.undo);
   const redo = useCanvas((s) => s.redo);
@@ -133,10 +135,10 @@ function Canvas() {
 
   const onConnect = (c: Connection) => {
     if (!c.source || !c.target) return;
-    // Any connection to a timeline node → add as shot
+    // Any connection to a composition node → add as shot
     const targetNode = nodes.find((n) => n.id === c.target);
-    if (targetNode?.kind === "timeline") {
-      addNodeToTimeline(c.source);
+    if (targetNode?.kind === "composition") {
+      addToComposition(c.source);
       return;
     }
     const target = c.targetHandle ?? c.target;
@@ -151,7 +153,7 @@ function Canvas() {
   }, []);
 
   // When connection drag ends without hitting a handle,
-  // check if mouse is over a timeline node and auto-connect
+  // check if mouse is over a composition node and auto-connect
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
       const sourceId = connectingSourceRef.current;
@@ -171,13 +173,13 @@ function Canvas() {
         const targetId = nodeEl.getAttribute("data-id");
         if (!targetId) continue;
         const targetNode = useCanvas.getState().nodes.find((n) => n.id === targetId);
-        if (targetNode?.kind === "timeline" && targetId !== sourceId) {
-          addNodeToTimeline(sourceId);
+        if (targetNode?.kind === "composition" && targetId !== sourceId) {
+          addToComposition(sourceId);
           return;
         }
       }
     },
-    [addNodeToTimeline],
+    [addToComposition],
   );
 
   return (
@@ -239,7 +241,7 @@ function DemoButton() {
   const bind = useCanvas((s) => s.bindNodeToShot);
 
   const run = async () => {
-    const tl = useCanvas.getState().nodes.find((n) => n.kind === "timeline");
+    const tl = useCanvas.getState().nodes.find((n) => n.kind === "composition");
     if (!tl) return;
     const shots = tl.data.shots ?? [];
     // 1. bind shot 04 (index 3) to img-2

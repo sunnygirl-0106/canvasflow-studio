@@ -5,7 +5,7 @@ import {
   PlayCircle,
   Music2,
   Upload,
-  Film,
+  Scissors,
 } from "lucide-react";
 import { useCanvas, type NodeKind } from "@/store/canvasStore";
 
@@ -29,21 +29,12 @@ const NODE_ITEMS: PanelItem[] = [
   { key: "text", title: "文本", subtitle: "脚本、广告词、品牌文案", icon: FileText },
   { key: "generateImage", title: "图片", subtitle: "海报、分镜、角色设计", icon: ImageIcon },
   { key: "generateVideo", title: "视频", subtitle: "视频、动画、电影", icon: PlayCircle },
+  { key: "composition", title: "视频合成", subtitle: "多个视频片段合为一个", icon: Scissors, isNew: true },
   { key: "audio", title: "音频", subtitle: "音乐、配音、音效", icon: Music2 },
 ];
 
 const RESOURCE_ITEMS: PanelItem[] = [
   { key: "image", title: "上传", subtitle: "支持图片、视频", icon: Upload },
-];
-
-const ASSEMBLY_ITEMS: PanelItem[] = [
-  {
-    key: "timeline",
-    title: "时间轴",
-    subtitle: "按顺序组装分镜，生成成片",
-    icon: Film,
-    isNew: true,
-  },
 ];
 
 export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
@@ -114,12 +105,6 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
         ))}
       </div>
 
-      <SectionLabel>组装</SectionLabel>
-      <div className="flex flex-col gap-2">
-        {ASSEMBLY_ITEMS.map((item) => (
-          <PanelCard key={item.key} item={item} onClick={() => handleSelect(item.key)} />
-        ))}
-      </div>
     </div>
   );
 }
@@ -163,15 +148,15 @@ function PanelCard({
           </span>
           {isNew && (
             <span
-              className="text-[10px] font-bold rounded px-1.5 py-0.5"
+              className="text-[10px] font-bold rounded-full px-1.5 py-0.5"
               style={{
-                background: "#ECFEFF",
-                color: "#0E7490",
+                background: "#F1F5F9",
+                color: "#64748B",
                 fontFamily: "Inter, system-ui",
                 lineHeight: 1,
               }}
             >
-              NEW
+              Beta
             </span>
           )}
         </div>

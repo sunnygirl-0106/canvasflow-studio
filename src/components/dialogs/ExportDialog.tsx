@@ -10,10 +10,10 @@ export function ExportDialog() {
 
   if (!exportOpen) return null;
 
-  const tl = nodes.find((n) => n.kind === "timeline");
+  const tl = nodes.find((n) => n.kind === "composition");
   const shots = tl?.data.shots ?? [];
   const text =
-    exportOpen === "fcpxml" ? buildFcpxml(shots, tl?.data.name ?? "timeline") : buildEdl(shots);
+    exportOpen === "fcpxml" ? buildFcpxml(shots, tl?.data.name ?? "composition") : buildEdl(shots);
 
   const copy = () => {
     navigator.clipboard.writeText(text);

@@ -2,7 +2,6 @@ import { Handle, Position, NodeToolbar } from "@xyflow/react";
 import { useState } from "react";
 import { Video, Upload, Loader2, Play } from "lucide-react";
 import { useCanvas, type CanvasNode } from "@/store/canvasStore";
-import { NodeHandleHint } from "@/components/NodeHandleHint";
 import { VideoPromptPanel } from "@/components/VideoPromptPanel";
 
 const COLORS = {
@@ -51,15 +50,7 @@ export function GenerateVideoNode({ id, data }: { id: string; data: CanvasNode["
         type="target"
         position={Position.Left}
         id="in"
-        style={{
-          width: 16,
-          height: 28,
-          borderRadius: "0 14px 14px 0",
-          background: COLORS.handle,
-          border: "none",
-          left: -2,
-          top: "50%",
-        }}
+        style={{ background: COLORS.handle }}
       />
 
       {/* Header */}
@@ -153,35 +144,9 @@ export function GenerateVideoNode({ id, data }: { id: string; data: CanvasNode["
         type="source"
         position={Position.Right}
         id="source-process"
-        style={{
-          width: 16,
-          height: 28,
-          borderRadius: "14px 0 0 14px",
-          background: COLORS.handle,
-          border: "none",
-          right: -2,
-          top: "50%",
-        }}
+        style={{ background: COLORS.handle }}
       />
 
-      {/* Output handle — bottom center, for timeline connections */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="source-timeline"
-        style={{
-          width: 18,
-          height: 10,
-          borderRadius: "0 0 9px 9px",
-          background: "#F97316",
-          border: "none",
-          bottom: -2,
-          left: "50%",
-        }}
-      />
-
-      {/* Hover hint near bottom handle */}
-      <NodeHandleHint position="bottom" />
 
       {/* Generation prompt panel — auto-shows when this node is selected */}
       <NodeToolbar position={Position.Bottom} offset={16}>

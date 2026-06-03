@@ -1,6 +1,5 @@
 import { Handle, Position } from "@xyflow/react";
 import type { CanvasNode } from "@/store/canvasStore";
-import { NodeHandleHint } from "@/components/NodeHandleHint";
 
 export function ImageNode({ data }: { data: CanvasNode["data"] }) {
   return (
@@ -13,21 +12,6 @@ export function ImageNode({ data }: { data: CanvasNode["data"] }) {
         <div className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">1 张</div>
       </div>
       <Handle type="source" position={Position.Right} id="source-process" />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="source-timeline"
-        style={{
-          width: 18,
-          height: 10,
-          borderRadius: "0 0 9px 9px",
-          background: "#F97316",
-          border: "none",
-          bottom: -2,
-          left: "50%",
-        }}
-      />
-      <NodeHandleHint position="bottom" />
     </div>
   );
 }

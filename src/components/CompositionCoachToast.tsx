@@ -2,39 +2,38 @@ import { useEffect, useRef, useState } from "react";
 import { Film, X, ArrowDown } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 
-const STORAGE_KEY = "phanthy:tl-coach-seen";
+const STORAGE_KEY = "phanthy:comp-coach-seen";
 const AUTO_HIDE_MS = 16000;
 
 /**
- * First-time coach mark for timeline.
- * Triggers once when the user creates their first new timeline this session
- * (mockData's pre-existing tl-1 is treated as already-seen).
+ * First-time coach mark for composition.
+ * Triggers once when the user creates their first new composition this session.
  * Permanently dismissable via localStorage.
  */
-export function TimelineCoachToast() {
+export function CompositionCoachToast() {
   const nodes = useCanvas((s) => s.nodes);
   const seenIdsRef = useRef<Set<string> | null>(null);
   const [visibleFor, setVisibleFor] = useState<string | null>(null);
 
-  // Lazy-init: snapshot pre-existing timeline ids so they don't trigger the coach
+  // Lazy-init: snapshot pre-existing composition ids so they don't trigger the coach
   if (seenIdsRef.current === null) {
     seenIdsRef.current = new Set(
       useCanvas
         .getState()
-        .nodes.filter((n) => n.kind === "timeline")
+        .nodes.filter((n) => n.kind === "composition")
         .map((n) => n.id),
     );
   }
 
-  // Watch for newly-added timelines
+  // Watch for newly-added compositions
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.localStorage.getItem(STORAGE_KEY) === "1") return;
     const seen = seenIdsRef.current!;
-    const newTl = nodes.find((n) => n.kind === "timeline" && !seen.has(n.id));
-    if (newTl) {
-      seen.add(newTl.id);
-      setVisibleFor(newTl.id);
+    const newComp = nodes.find((n) => n.kind === "composition" && !seen.has(n.id));
+    if (newComp) {
+      seen.add(newComp.id);
+      setVisibleFor(newComp.id);
     }
   }, [nodes]);
 
@@ -96,20 +95,20 @@ export function TimelineCoachToast() {
               className="text-[14px] font-semibold"
               style={{ fontFamily: "PingFang SC, Inter, system-ui" }}
             >
-              时间轴已创建
+              视频合成已创建
             </span>
             <span
               className="text-[10px] font-bold rounded px-1.5 py-0.5"
               style={{ background: "#1E293B", color: "#5EEAD4" }}
             >
-              NEW
+              Beta
             </span>
           </div>
           <div
             className="text-[12.5px] mt-1.5 leading-snug"
             style={{ color: "#CBD5E1", fontFamily: "PingFang SC, Inter, system-ui" }}
           >
-            从视频节点右侧拖一根线到时间轴上方的
+            从视频节点右侧拖一根线到合成节点左侧的
             <ArrowDown className="inline-block mx-0.5 w-3 h-3 align-text-bottom" />
             端口，就能替换或新增分镜。
           </div>

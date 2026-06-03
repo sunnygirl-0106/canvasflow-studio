@@ -32,7 +32,7 @@ type ItemSpec =
  * Context-aware right-click menu.
  * Pane: upload / add node / undo / paste
  * Node (media): + primary "加入到最近的时间轴", + copy/delete
- * Node (other): no timeline CTA but still copy/delete
+ * Node (other): no composition CTA but still copy/delete
  */
 export function ContextMenu() {
   const menu = useCanvas((s) => s.contextMenu);
@@ -172,7 +172,7 @@ function useMenuItems(): ItemSpec[] {
   const past = useCanvas((s) => s.past);
   const undo = useCanvas((s) => s.undo);
   const removeNode = useCanvas((s) => s.removeNode);
-  const addNodeToTimeline = useCanvas((s) => s.addNodeToTimeline);
+  const addToComposition = useCanvas((s) => s.addToComposition);
   const setContextMenu = useCanvas((s) => s.setContextMenu);
 
   return useMemo<ItemSpec[]>(() => {
@@ -180,7 +180,7 @@ function useMenuItems(): ItemSpec[] {
 
     const target = menu.targetNodeId ? nodes.find((n) => n.id === menu.targetNodeId) ?? null : null;
     const isMedia = target ? MEDIA_KINDS.includes(target.kind) : false;
-    const hasTimeline = nodes.some((n) => n.kind === "timeline");
+    const hasComposition = nodes.some((n) => n.kind === "composition");
     const canUndo = past.length > 0;
     const close = () => setContextMenu(null);
 
@@ -190,12 +190,12 @@ function useMenuItems(): ItemSpec[] {
     if (isMedia && target) {
       items.push({
         kind: "item",
-        key: "add-to-timeline",
+        key: "add-to-composition",
         icon: Film,
-        label: hasTimeline ? "加入到最近的时间轴" : "新建时间轴并加入",
+        label: hasComposition ? "加入到最近的视频合成" : "新建视频合成并加入",
         variant: "primary",
         onClick: () => {
-          addNodeToTimeline(target.id);
+          addToComposition(target.id);
           close();
         },
       });
@@ -283,5 +283,5 @@ function useMenuItems(): ItemSpec[] {
     }
 
     return items;
-  }, [menu, nodes, past, undo, removeNode, addNodeToTimeline, setContextMenu]);
+  }, [menu, nodes, past, undo, removeNode, addToComposition, setContextMenu]);
 }
