@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Volume2, VolumeX } from "lucide-react";
 import { useCanvas, type Shot } from "@/store/canvasStore";
 
 /* ── Clip colour tokens ──────────────────────────────────── */
@@ -13,11 +13,12 @@ const CLIP_STYLES: Record<Shot["color"], { bg: string; border: string; thumbBg: 
 };
 
 /* ── Dimensions ───────────────────────────────────────────── */
-const RULER_H = 36;
-const TRACK_H = 64;
-const CLIP_H = 48;
+const RULER_H = 28;
+const TRACK_H = 68;
+const CLIP_H = 52;
 const CLIP_Y = 8;
 const TRACK_PAD_LEFT = 16;
+const SIDEBAR_W = 44;
 const MIN_DURATION_SEC = 0.5;
 
 /* ── Helpers ──────────────────────────────────────────────── */
@@ -25,6 +26,14 @@ export function fmtSec(s: number) {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function fmtTimecode(s: number) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  const frames = Math.round((s % 1) * 25);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}:${String(frames).padStart(2, "0")}`;
 }
 
 interface LayoutClip {
@@ -49,6 +58,19 @@ function buildTicks(pxPerSec: number, totalWidth: number) {
   const maxSec = totalWidth / pxPerSec;
   for (let s = 0; s <= maxSec; s += interval) {
     ticks.push({ label: fmtSec(s), x: s * pxPerSec + TRACK_PAD_LEFT });
+  }
+  return ticks;
+}
+
+function buildSubTicks(pxPerSec: number, totalWidth: number) {
+  const ticks: { x: number; major: boolean }[] = [];
+  const maxSec = totalWidth / pxPerSec;
+  const interval = pxPerSec >= 40 ? 4 : pxPerSec >= 20 ? 8 : 16;
+  for (let s = 0; s <= maxSec; s += 1) {
+    const isMajor = s % interval === 0;
+    if (!isMajor) {
+      ticks.push({ x: s * pxPerSec + TRACK_PAD_LEFT, major: false });
+    }
   }
   return ticks;
 }
@@ -79,9 +101,11 @@ interface Props {
   pxPerSec: number;
   selectedClipId: string | null;
   onSeek: (t: number) => void;
+  muted: boolean;
+  onToggleMute: () => void;
 }
 
-export function TrackTimeline({ compId, shots, currentTime, pxPerSec, selectedClipId, onSeek }: Props) {
+export function TrackTimeline({ compId, shots, currentTime, pxPerSec, selectedClipId, onSeek, muted, onToggleMute }: Props) {
   const updateShot = useCanvas((s) => s.updateShot);
   const reorderShots = useCanvas((s) => s.reorderShots);
   const pushHistory = useCanvas((s) => s.pushHistory);
@@ -99,6 +123,7 @@ export function TrackTimeline({ compId, shots, currentTime, pxPerSec, selectedCl
   const contentWidth = lastClip ? lastClip.x + lastClip.w + 200 : 600;
 
   const ticks = buildTicks(pxPerSec, contentWidth);
+  const subTicks = buildSubTicks(pxPerSec, contentWidth);
   const gridLines = buildGridLines(pxPerSec, contentWidth);
 
   const playheadX = TRACK_PAD_LEFT + currentTime * pxPerSec;
@@ -259,14 +284,35 @@ export function TrackTimeline({ compId, shots, currentTime, pxPerSec, selectedCl
   })();
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-shrink-0 overflow-x-auto overflow-y-hidden relative"
-      style={{
-        background: "#111827",
-        borderTop: "1px solid #1F2937",
-      }}
-    >
+    <div className="flex flex-shrink-0" style={{ borderTop: "1px solid #1F2937" }}>
+      {/* Left sidebar */}
+      <div
+        className="flex flex-col items-center flex-shrink-0"
+        style={{ width: SIDEBAR_W, background: "#1E293B", borderRight: "1px solid #1F2937" }}
+      >
+        <div style={{ height: RULER_H }} />
+        <div className="flex flex-col items-center gap-2 py-2">
+          <button
+            onClick={onToggleMute}
+            className="flex items-center justify-center rounded hover:bg-white/10"
+            style={{ width: 28, height: 28 }}
+            title={muted ? "取消静音" : "静音"}
+          >
+            {muted ? (
+              <VolumeX className="w-4 h-4" style={{ color: "#EF4444" }} />
+            ) : (
+              <Volume2 className="w-4 h-4" style={{ color: "#64748B" }} />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Timeline content */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-x-auto overflow-y-hidden relative"
+        style={{ background: "#111827" }}
+      >
       <div style={{ width: contentWidth, minWidth: "100%", position: "relative" }}>
         {/* Ruler */}
         <div
@@ -282,6 +328,22 @@ export function TrackTimeline({ compId, shots, currentTime, pxPerSec, selectedCl
             >
               {tick.label}
             </span>
+          ))}
+          {/* Sub-second tick marks */}
+          {subTicks.map((st, i) => (
+            <div
+              key={`sub-${i}`}
+              className="absolute"
+              style={{ left: st.x, bottom: 0, width: 1, height: 8, background: "#334155" }}
+            />
+          ))}
+          {/* Major tick marks */}
+          {ticks.map((tick, i) => (
+            <div
+              key={`major-${i}`}
+              className="absolute"
+              style={{ left: tick.x, bottom: 0, width: 1, height: 14, background: "#475569" }}
+            />
           ))}
         </div>
 
@@ -378,31 +440,39 @@ export function TrackTimeline({ compId, shots, currentTime, pxPerSec, selectedCl
                       />
                     </div>
 
-                    {/* Thumbnail */}
-                    {clip.shot.thumbnail && (
-                      <img
-                        src={clip.shot.thumbnail}
-                        alt=""
-                        className="absolute rounded object-cover"
-                        style={{ left: 8, top: 6, width: 48, height: 28 }}
-                        draggable={false}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                      />
+                    {/* Tiled thumbnails */}
+                    {clip.shot.thumbnail ? (
+                      <div
+                        className="absolute inset-0 overflow-hidden rounded-md"
+                        style={{ top: 20 }}
+                      >
+                        <div className="flex h-full" style={{ opacity: 0.35 }}>
+                          {Array.from({ length: Math.max(1, Math.ceil(clip.w / 60)) }).map((_, ti) => (
+                            <img
+                              key={ti}
+                              src={clip.shot.thumbnail!}
+                              alt=""
+                              className="h-full object-cover flex-shrink-0"
+                              style={{ width: 60 }}
+                              draggable={false}
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 rounded-md" style={{ top: 20, background: cs.thumbBg, opacity: 0.4 }} />
                     )}
-                    <div className="absolute rounded" style={{ left: 8, top: 6, width: 48, height: 28, background: cs.thumbBg, zIndex: -1 }} />
 
-                    {/* Name + duration */}
+                    {/* Name + timecode label at top */}
                     <span
-                      className="absolute text-[11px] font-bold truncate"
-                      style={{ left: 64, top: 6, right: 10, color: "#FFFFFF", fontFamily: "Inter, system-ui", whiteSpace: "nowrap" }}
+                      className="absolute text-[10px] font-bold truncate"
+                      style={{ left: 8, top: 4, right: 10, color: "#FFFFFF", fontFamily: "Inter, system-ui", whiteSpace: "nowrap", zIndex: 2 }}
                     >
-                      {clip.shot.name}
-                    </span>
-                    <span
-                      className="absolute text-[10px] font-medium"
-                      style={{ left: 64, top: 24, color: cs.timeColor, fontFamily: "Inter, monospace" }}
-                    >
-                      {clip.shot.duration.toFixed(1)}s
+                      {clip.shot.name}{" "}
+                      <span style={{ fontWeight: 500, color: cs.timeColor, fontFamily: "Inter, monospace" }}>
+                        {fmtTimecode(clip.shot.duration)}
+                      </span>
                     </span>
 
                     {/* Resize tooltip */}
@@ -485,6 +555,7 @@ export function TrackTimeline({ compId, shots, currentTime, pxPerSec, selectedCl
             {fmtSec(currentTime)}
           </span>
         </div>
+      </div>
       </div>
     </div>
   );

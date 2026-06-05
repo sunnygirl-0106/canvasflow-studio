@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PhanthyMovie · 产品逻辑说明</title>
+<style>
+  :root {
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --ink: #0F172A;
+    --ink-soft: #475569;
+    --ink-mute: #94A3B8;
+    --line: #E2E8F0;
+    --teal: #14B8A6;
+    --teal-soft: #ECFEFF;
+    --teal-ink: #0E7490;
+    --cyan: #56C7CF;
+    --purple: #7C3AED;
+    --orange: #F97316;
+    --amber: #F59E0B;
+    --red: #EF4444;
+    --green: #22C55E;
+    --code-bg: #0F172A;
+    --code-ink: #E2E8F0;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+    --shadow-md: 0 8px 24px rgba(15,23,42,.06);
+    --shadow-lg: 0 18px 40px rgba(15,23,42,.10);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: "PingFang SC", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 15px; line-height: 1.7;
+  }
+  a { color: inherit; }
+  code, pre { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; }
+  code { background: #F1F5F9; padding: 1px 6px; border-radius: 4px; font-size: 0.88em; color: #0F172A; }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); padding: 18px 22px;
+    border-radius: 12px; overflow-x: auto; line-height: 1.6; font-size: 13px;
+  }
+  pre code { background: transparent; padding: 0; color: inherit; }
+
+  /* Layout */
+  .app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  aside.nav {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: var(--surface); border-right: 1px solid var(--line);
+    padding: 28px 18px; padding-bottom: 60px;
+  }
+  main { padding: 56px 64px 120px; max-width: 1080px; }
+  @media (max-width: 1024px) {
+    .app { grid-template-columns: 1fr; }
+    aside.nav { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    main { padding: 32px 24px 80px; }
+  }
+
+  /* Nav */
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+  .brand-mark { width: 30px; height: 22px; }
+  .brand-name { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+  .nav-section { font-size: 11px; font-weight: 600; color: var(--ink-mute); letter-spacing: .08em; text-transform: uppercase; padding: 14px 12px 6px; }
+  .nav-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 10px; text-decoration: none;
+    font-size: 14px; color: var(--ink-soft); transition: background .15s, color .15s;
+    cursor: pointer;
+  }
+  .nav-link:hover { background: #F1F5F9; color: var(--ink); }
+  .nav-link.active { background: #ECFEFF; color: var(--teal-ink); font-weight: 600; }
+  .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-mute); flex-shrink: 0; }
+  .nav-link.active .nav-dot { background: var(--teal); }
+
+  /* Page header */
+  .hero { padding-bottom: 36px; border-bottom: 1px solid var(--line); margin-bottom: 48px; }
+  .hero .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .12em; color: var(--teal-ink); text-transform: uppercase; }
+  .hero h1 { font-size: 40px; line-height: 1.2; margin: 12px 0 14px; letter-spacing: -0.02em; }
+  .hero p.lead { font-size: 17px; color: var(--ink-soft); max-width: 700px; margin: 0; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; flex-wrap: wrap; }
+  .meta-item { font-size: 13px; color: var(--ink-mute); display: flex; align-items: center; gap: 6px; }
+  .meta-item b { color: var(--ink); font-weight: 600; }
+
+  /* Section */
+  section { margin-bottom: 72px; scroll-margin-top: 20px; }
+  section h2 {
+    font-size: 26px; letter-spacing: -0.01em; margin: 0 0 8px;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  section h2 .num {
+    font-size: 13px; font-weight: 600; color: var(--teal); background: var(--teal-soft);
+    padding: 3px 10px; border-radius: 999px; letter-spacing: .04em;
+  }
+  section > p.section-intro { color: var(--ink-soft); margin: 0 0 28px; max-width: 720px; }
+  section h3 { font-size: 18px; margin: 36px 0 12px; letter-spacing: -0.005em; }
+  section h4 { font-size: 15px; margin: 24px 0 8px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+
+  /* Cards */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    padding: 22px 24px; box-shadow: var(--shadow-sm); margin-bottom: 16px;
+  }
+  .card.flat { box-shadow: none; }
+  .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .card-title { font-size: 17px; font-weight: 600; }
+  .card-sub { font-size: 13px; color: var(--ink-mute); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+    letter-spacing: .03em;
+  }
+  .badge.green { background: #DCFCE7; color: #15803D; }
+  .badge.amber { background: #FEF3C7; color: #92400E; }
+  .badge.red { background: #FEE2E2; color: #991B1B; }
+  .badge.blue { background: #DBEAFE; color: #1E40AF; }
+  .badge.teal { background: var(--teal-soft); color: var(--teal-ink); }
+  .badge.gray { background: #F1F5F9; color: var(--ink-soft); }
+  .badge.purple { background: #EDE9FE; color: #5B21B6; }
+  .badge.orange { background: #FFEDD5; color: #C2410C; }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Story / spec lists */
+  .story {
+    background: #FAFCFF; border-left: 3px solid var(--teal); padding: 14px 18px;
+    border-radius: 0 10px 10px 0; margin: 14px 0; font-size: 14px; color: var(--ink-soft);
+  }
+  .story b { color: var(--ink); font-weight: 600; }
+  .spec-list { margin: 10px 0 0; padding: 0; list-style: none; }
+  .spec-list li {
+    display: grid; grid-template-columns: 110px 1fr; gap: 18px;
+    padding: 10px 0; border-bottom: 1px dashed var(--line); align-items: start;
+  }
+  .spec-list li:last-child { border-bottom: 0; }
+  .spec-list .k { font-size: 12px; color: var(--ink-mute); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding-top: 2px; }
+  .spec-list .v { font-size: 14px; }
+
+  /* Two-col compare for Before/After */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+  .compare .col {
+    border-radius: 14px; padding: 18px 20px; border: 1px solid var(--line);
+  }
+  .compare .col.before { background: #FFF7ED; border-color: #FED7AA; }
+  .compare .col.after { background: #F0FDFA; border-color: #99F6E4; }
+  .compare .col .lbl {
+    font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .compare .col.before .lbl { color: #C2410C; }
+  .compare .col.after .lbl { color: var(--teal-ink); }
+  .compare .col p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+  .compare .col strong { color: var(--ink); }
+
+  /* Mental model SVG container */
+  .diagram {
+    background: linear-gradient(180deg,#FAFCFF 0%,#FFFFFF 100%);
+    border: 1px solid var(--line); border-radius: 16px; padding: 24px; margin: 18px 0;
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .diagram-caption { font-size: 13px; color: var(--ink-mute); margin-top: 10px; text-align: center; }
+
+  /* Node previews */
+  .node-preview {
+    background: #FFFFFF; border-radius: 14px; padding: 16px; border: 1px solid var(--line);
+    position: relative;
+  }
+  .node-preview .np-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .node-preview .np-title { font-size: 14px; font-weight: 600; }
+  .np-meta { font-size: 12px; color: var(--ink-mute); }
+  .handle-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .handle-row {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    padding: 6px 10px; background: #F8FAFC; border-radius: 8px;
+  }
+  .handle-chip { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Tag row */
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+
+  /* Status row */
+  .status-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #F8FAFC; border: 1px solid var(--line);
+    padding: 4px 10px; border-radius: 999px; font-size: 12px; color: var(--ink-soft);
+  }
+
+  /* Callout */
+  .callout {
+    border-radius: 14px; padding: 16px 20px; margin: 16px 0; font-size: 14px;
+    border-left: 3px solid;
+  }
+  .callout.note { background: #EFF6FF; border-color: #3B82F6; color: #1E3A8A; }
+  .callout.warn { background: #FFF7ED; border-color: #F97316; color: #9A3412; }
+  .callout.success { background: #F0FDF4; border-color: #22C55E; color: #166534; }
+  .callout b { color: inherit; }
+
+  /* Flow steps */
+  .steps { counter-reset: step; margin: 16px 0; padding: 0; list-style: none; }
+  .steps > li {
+    counter-increment: step; position: relative; padding-left: 44px; margin-bottom: 14px;
+    min-height: 28px;
+  }
+  .steps > li::before {
+    content: counter(step); position: absolute; left: 0; top: 0;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ink); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+  .steps > li b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+
+  /* TOC top banner */
+  .top-toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+  .top-toc a {
+    text-decoration: none; padding: 6px 12px; border-radius: 999px;
+    background: #F1F5F9; color: var(--ink-soft); font-size: 13px;
+    border: 1px solid transparent; transition: all .15s;
+  }
+  .top-toc a:hover { background: #ECFEFF; color: var(--teal-ink); border-color: #A5F3FC; }
+
+  /* Footer */
+  footer { color: var(--ink-mute); font-size: 13px; padding-top: 40px; border-top: 1px solid var(--line); }
+
+  /* utility */
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .muted { color: var(--ink-mute); }
+  .em-link { color: var(--teal-ink); text-decoration: none; font-weight: 500; border-bottom: 1px dashed currentColor; }
+  hr.sep { border: 0; border-top: 1px dashed var(--line); margin: 28px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="nav">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 30 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 19L13 3" stroke="#0F172A" stroke-width="3" stroke-linecap="round" />
+        <path d="M17 19L27 3" stroke="#34D399" stroke-width="3" stroke-linecap="round" />
+      </svg>
+      <span class="brand-name">PhanthyMovie</span>
+    </div>
+
+    <div class="nav-section">本次对齐</div>
+    <a class="nav-link" data-anchor="overview"><span class="nav-dot"></span>产品定位与心智模型</a>
+    <a class="nav-link" data-anchor="iteration"><span class="nav-dot"></span>本轮迭代 · 4 件事</a>
+
+    <div class="nav-section">现有功能</div>
+    <a class="nav-link" data-anchor="canvas"><span class="nav-dot"></span>画布与左栏</a>
+    <a class="nav-link" data-anchor="nodes"><span class="nav-dot"></span>节点系统</a>
+    <a class="nav-link" data-anchor="timeline"><span class="nav-dot"></span>时间线与镜头</a>
+    <a class="nav-link" data-anchor="edges"><span class="nav-dot"></span>连接关系（两条路径）</a>
+    <a class="nav-link" data-anchor="properties"><span class="nav-dot"></span>右键菜单与属性面板</a>
+    <a class="nav-link" data-anchor="export"><span class="nav-dot"></span>导出</a>
+    <a class="nav-link" data-anchor="state"><span class="nav-dot"></span>状态管理 / 数据模型</a>
+
+    <div class="nav-section">附录</div>
+    <a class="nav-link" data-anchor="todo"><span class="nav-dot"></span>遗留 TODO</a>
+    <a class="nav-link" data-anchor="acceptance"><span class="nav-dot"></span>验收清单</a>
+  </aside>
+
+  <main>
+    <div class="hero">
+      <div class="eyebrow">PhanthyMovie · 产品逻辑说明 v0.1</div>
+      <h1>关键帧 · CanvasFlow Studio</h1>
+      <p class="lead">
+        一款基于"画布 + 时间线"的 AI 短片创作工具。用户在画布上摆放图片/视频素材，
+        通过连接线把它们串成镜头序列，最终导出可在专业剪辑软件中继续编辑的 FCPXML / EDL。
+      </p>
+      <div class="meta">
+        <div class="meta-item">技术栈：<b>React + Zustand + React Flow (@xyflow/react) + Vite</b></div>
+        <div class="meta-item">入口：<b>src/routes/index.tsx</b></div>
+        <div class="meta-item">状态：<b>src/store/canvasStore.ts</b></div>
+      </div>
+      <div class="top-toc">
+        <a href="#overview">心智模型</a>
+        <a href="#iteration">本轮迭代</a>
+        <a href="#nodes">节点系统</a>
+        <a href="#timeline">时间线</a>
+        <a href="#edges">连接关系</a>
+        <a href="#export">导出</a>
+        <a href="#acceptance">验收</a>
+      </div>
+    </div>
+
+    <!-- ─────────── 1. Overview / Mental Model ─────────── -->
+    <section id="overview">
+      <h2><span class="num">01</span>产品定位与心智模型</h2>
+      <p class="section-intro">
+        如果只剩五分钟讲清楚产品，请讲下面这张图。整个产品只有<strong>三层抽象</strong>，
+        其余所有功能都在这三层上演绎。
+      </p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 880 380" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0 0 L10 5 L0 10 z" fill="#94A3B8" />
+            </marker>
+            <marker id="arr-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0 0 L10 5 L0 10 z" fill="#14B8A6" />
+            </marker>
+          </defs>
+
+          <!-- Layer labels -->
+          <text x="40" y="60" font-size="12" font-weight="600" fill="#94A3B8" letter-spacing="2">LAYER 1 · 素材</text>
+          <text x="40" y="200" font-size="12" font-weight="600" fill="#94A3B8" letter-spacing="2">LAYER 2 · 绑定</text>
+          <text x="40" y="320" font-size="12" font-weight="600" fill="#94A3B8" letter-spacing="2">LAYER 3 · 时序</text>
+
+          <!-- Media nodes -->
+          <g>
+            <rect x="180" y="30" width="120" height="80" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+            <rect x="194" y="42" width="92" height="44" rx="6" fill="#FEF3C7"/>
+            <text x="240" y="100" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">图片素材</text>
+
+            <rect x="360" y="30" width="120" height="80" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+            <rect x="374" y="42" width="92" height="44" rx="6" fill="#EDE9FE"/>
+            <text x="420" y="100" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">AI 生图</text>
+
+            <rect x="540" y="30" width="120" height="80" rx="12" fill="#FFFFFF" stroke="#56C7CF" stroke-width="2"/>
+            <rect x="554" y="42" width="92" height="44" rx="6" fill="#CFFAFE"/>
+            <text x="600" y="100" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">AI 生视频</text>
+
+            <rect x="720" y="30" width="120" height="80" rx="12" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="4 4"/>
+            <text x="780" y="78" text-anchor="middle" font-size="12" fill="#94A3B8" font-weight="500">文本 / 音频<tspan x="780" dy="14" font-size="10">(规划中)</tspan></text>
+          </g>
+
+          <!-- Connection lines (edges) -->
+          <path d="M240 110 C 240 160, 280 180, 340 220" stroke="#56C7CF" stroke-width="2" fill="none" marker-end="url(#arr-teal)"/>
+          <path d="M420 110 C 420 160, 440 180, 460 220" stroke="#7C3AED" stroke-width="2" fill="none" marker-end="url(#arr-teal)"/>
+          <path d="M600 110 C 600 160, 580 180, 580 220" stroke="#F97316" stroke-width="2" fill="none" marker-end="url(#arr-teal)"/>
+
+          <!-- Edge label -->
+          <text x="660" y="170" font-size="11" fill="#14B8A6" font-weight="600" font-style="italic">edge · 带颜色的连接线</text>
+
+          <!-- Timeline container -->
+          <rect x="180" y="225" width="660" height="120" rx="14" fill="#0F172A"/>
+          <text x="200" y="248" font-size="11" fill="#94A3B8" font-weight="600" letter-spacing="1">TIMELINE NODE</text>
+
+          <!-- Shots -->
+          <rect x="200" y="258" width="180" height="64" rx="6" fill="#0E7490" stroke="#67E8F9" stroke-width="1.5"/>
+          <text x="290" y="294" text-anchor="middle" font-size="12" fill="#CFFAFE" font-weight="600">Shot 01 · 11s</text>
+
+          <rect x="390" y="258" width="220" height="64" rx="6" fill="#5B21B6" stroke="#A78BFA" stroke-width="1.5"/>
+          <text x="500" y="294" text-anchor="middle" font-size="12" fill="#EDE9FE" font-weight="600">Shot 02 · 15s</text>
+
+          <rect x="620" y="258" width="200" height="64" rx="6" fill="#C2410C" stroke="#FDBA74" stroke-width="1.5"/>
+          <text x="720" y="294" text-anchor="middle" font-size="12" fill="#FFEDD5" font-weight="600">Shot 03 · 13s</text>
+        </svg>
+        <div class="diagram-caption">素材 → 边（绑定） → 镜头（Shot，住在 Timeline 里）</div>
+      </div>
+
+      <div class="grid-3">
+        <div class="card flat">
+          <div class="card-header">
+            <span class="badge teal"><span class="dot"></span>Layer 1</span>
+            <span class="card-title">素材节点</span>
+          </div>
+          <p class="card-sub">Media Node。承载内容本身——一张图、一段视频、未来的一段文本/音频。它不知道自己将在哪个镜头被使用。</p>
+        </div>
+        <div class="card flat">
+          <div class="card-header">
+            <span class="badge purple"><span class="dot"></span>Layer 2</span>
+            <span class="card-title">连接边</span>
+          </div>
+          <p class="card-sub">Edge。一条"素材 → 镜头"的可视化绑定。颜色与目标 Shot 一致，是用户理解"这段视频从哪来"的唯一锚点。</p>
+        </div>
+        <div class="card flat">
+          <div class="card-header">
+            <span class="badge orange"><span class="dot"></span>Layer 3</span>
+            <span class="card-title">时间线 / 镜头</span>
+          </div>
+          <p class="card-sub">Timeline & Shot。承载时序。每个 Shot 是时间轴上的一个"格子"，引用一个素材并定义其在片中的时长与起止。</p>
+        </div>
+      </div>
+
+      <div class="callout note">
+        <b>关键判断：</b> 同一个产品的功能多数都能被这张图覆盖。<u>新增功能前先问自己</u>——它属于第几层？它和这三个抽象的关系是什么？
+      </div>
+    </section>
+
+    <!-- ─────────── 2. Iteration: 4 changes ─────────── -->
+    <section id="iteration">
+      <h2><span class="num">02</span>本轮迭代 · 我们要改的 4 件事</h2>
+      <p class="section-intro">
+        以下是这次对齐会的核心。每件事都给了"现状 → 目标 → 验收"。
+        改完之后整个产品的体验会顺畅很多。
+      </p>
+
+      <!-- 2.1 Timeline real data -->
+      <div class="card">
+        <div class="card-header">
+          <span class="badge red"><span class="dot"></span>P0 · 修复</span>
+          <span class="card-title">① 时间线渲染真实数据，不再是 Mock</span>
+        </div>
+        <div class="story">
+          <b>用户故事：</b> 我新建几个视频节点合并到时间线，时间线里出现的应该是<b>我的</b>视频，
+          而不是开发预置的"开场 / 主场景 / 收束"。
+        </div>
+
+        <div class="compare">
+          <div class="col before">
+            <div class="lbl">现状</div>
+            <p>
+              <code>TimelineNode.tsx</code> 内部硬编码了 <code>INITIAL_CLIPS</code>（三个"古风"色卡），
+              UI 永远渲染这三块。<br>
+              <strong>store 里其实有真数据</strong> <code>data.shots[]</code>，但渲染层根本不读它。
+            </p>
+          </div>
+          <div class="col after">
+            <div class="lbl">目标</div>
+            <p>
+              删除 <code>INITIAL_CLIPS</code>，clips 完全由 <code>data.shots</code> 渲染：
+              标题来自 <code>shot.name</code>，时长来自 <code>shot.duration</code>，
+              缩略图来自 <code>shot.thumbnail</code>，颜色来自 <code>shot.color</code>。
+            </p>
+          </div>
+        </div>
+
+        <h4>验收</h4>
+        <ul class="spec-list">
+          <li><span class="k">空画布</span><span class="v">把 <code>mockData.ts</code> 的 <code>initialNodes</code> 清空后，应用打开是干净的画布，不再出现预置的"古风短片"。</span></li>
+          <li><span class="k">动态联动</span><span class="v">添加 N 个视频 → 多选合并 → 时间线里出现 N 个 Shot，缩略图、时长、顺序完全来自这些视频。</span></li>
+          <li><span class="k">退化态</span><span class="v"><code>data.shots</code> 为空时，时间线显示空状态提示，不再绘制死的三个色卡。</span></li>
+        </ul>
+      </div>
+
+      <!-- 2.2 Two paths -->
+      <div class="card">
+        <div class="card-header">
+          <span class="badge amber"><span class="dot"></span>P0 · 明确</span>
+          <span class="card-title">② 创建时间线的两条路径 + 连接线必须可见</span>
+        </div>
+        <div class="story">
+          <b>用户故事：</b> 我有两种习惯——
+          要么先生成好素材再把它们串起来（A 路径），
+          要么先建一条空时间轴再往里填素材（B 路径）。两种都要能走通，
+          而且必须看得到"素材属于哪个镜头"的连接线。
+        </div>
+
+        <div class="diagram">
+          <svg viewBox="0 0 880 320" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0 0 L10 5 L0 10 z" fill="#14B8A6" />
+              </marker>
+            </defs>
+
+            <!-- Path A -->
+            <rect x="20" y="20" width="420" height="280" rx="14" fill="#F0FDFA" stroke="#99F6E4"/>
+            <text x="40" y="50" font-size="13" font-weight="700" fill="#0E7490" letter-spacing="1">路径 A · 自动串联（推荐）</text>
+
+            <rect x="50" y="70" width="80" height="50" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+            <rect x="160" y="70" width="80" height="50" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+            <rect x="270" y="70" width="80" height="50" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+            <text x="90" y="102" text-anchor="middle" font-size="11" fill="#0F172A">素材 A</text>
+            <text x="200" y="102" text-anchor="middle" font-size="11" fill="#0F172A">素材 B</text>
+            <text x="310" y="102" text-anchor="middle" font-size="11" fill="#0F172A">素材 C</text>
+
+            <rect x="40" y="130" width="320" height="20" rx="10" fill="#0F172A"/>
+            <text x="200" y="144" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">已选 3 个 · 合并到时间轴</text>
+
+            <path d="M90 150 C 90 180, 110 200, 130 215" stroke="#56C7CF" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+            <path d="M200 150 C 200 180, 200 200, 220 215" stroke="#7C3AED" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+            <path d="M310 150 C 310 180, 290 200, 310 215" stroke="#F97316" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+
+            <rect x="40" y="220" width="380" height="60" rx="10" fill="#0F172A"/>
+            <rect x="55" y="232" width="100" height="38" rx="4" fill="#0E7490" stroke="#67E8F9"/>
+            <rect x="160" y="232" width="120" height="38" rx="4" fill="#5B21B6" stroke="#A78BFA"/>
+            <rect x="285" y="232" width="120" height="38" rx="4" fill="#C2410C" stroke="#FDBA74"/>
+
+            <!-- Path B -->
+            <rect x="460" y="20" width="400" height="280" rx="14" fill="#FFF7ED" stroke="#FED7AA"/>
+            <text x="480" y="50" font-size="13" font-weight="700" fill="#C2410C" letter-spacing="1">路径 B · 手动连接</text>
+
+            <rect x="490" y="70" width="80" height="50" rx="8" fill="#FFFFFF" stroke="#CBD5E1"/>
+            <text x="530" y="102" text-anchor="middle" font-size="11" fill="#0F172A">素材 X</text>
+
+            <text x="700" y="100" font-size="11" fill="#94A3B8" text-anchor="middle">用户从左栏</text>
+            <text x="700" y="115" font-size="11" fill="#94A3B8" text-anchor="middle">先建空时间线</text>
+
+            <path d="M570 95 C 620 95, 660 130, 700 200" stroke="#F97316" stroke-width="2" fill="none" marker-end="url(#arr2)" stroke-dasharray="5 4"/>
+            <text x="630" y="155" font-size="11" fill="#C2410C" font-style="italic">手动拖一条线</text>
+
+            <rect x="480" y="180" width="360" height="100" rx="10" fill="#0F172A"/>
+            <text x="500" y="208" font-size="11" fill="#94A3B8" font-weight="600">空 TIMELINE</text>
+            <rect x="500" y="218" width="100" height="50" rx="4" fill="#C2410C" stroke="#FDBA74"/>
+            <text x="550" y="246" text-anchor="middle" font-size="11" fill="#FFEDD5">Shot · X</text>
+            <rect x="612" y="218" width="220" height="50" rx="4" fill="#1F2937" stroke="#475467" stroke-dasharray="4 4"/>
+            <text x="720" y="247" text-anchor="middle" font-size="11" fill="#64748B">等待拖入...</text>
+          </svg>
+        </div>
+
+        <div class="grid-2">
+          <div class="card flat">
+            <div class="card-header"><span class="badge teal">路径 A · 自动串联</span></div>
+            <h4 style="margin-top:8px">触发条件</h4>
+            <p class="card-sub">用户在画布上多选 ≥2 个素材节点（image / generateImage / generateVideo）。</p>
+            <h4>系统行为</h4>
+            <ol class="steps" style="margin:0">
+              <li><b>浮出 CTA</b>顶部弹出"合并到时间轴"胶囊（<code>MultiSelectionCTA</code>）。</li>
+              <li><b>排序</b>按节点 x 坐标从左到右、同列按 y 排（已实现）。</li>
+              <li><b>建时间线</b>在选区下方生成 Timeline，宽度按数量自适应。</li>
+              <li><b>建 Shot</b>每个素材生成一个 Shot，继承时长与缩略图。</li>
+              <li><b>建 Edge</b>为每个素材→Timeline 创建一条带颜色的边。</li>
+            </ol>
+          </div>
+          <div class="card flat">
+            <div class="card-header"><span class="badge orange">路径 B · 手动连接</span></div>
+            <h4 style="margin-top:8px">触发条件</h4>
+            <p class="card-sub">用户从左栏添加一个空 Timeline 节点，或想往现有 Timeline 追加。</p>
+            <h4>系统行为</h4>
+            <ol class="steps" style="margin:0">
+              <li><b>拖线</b>从素材底部端口拖一条线到 Timeline 节点。</li>
+              <li><b>松手判定</b><code>onConnect</code> 或 <code>onConnectEnd</code> 检测到目标是 timeline。</li>
+              <li><b>追加 Shot</b>调用 <code>addNodeToTimeline</code>，在末尾追加。</li>
+              <li><b>建 Edge</b>同样创建一条带颜色的连接线。</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <b>不可破的约束：</b> 任何"素材 → Shot"的绑定，<u>必须</u>在画布上显式画出一条带颜色的连接线。
+          颜色与目标 Shot 在 Timeline 内的色卡颜色一致。无连接线 = 用户无法理解片段来源 = 功能失效。
+        </div>
+      </div>
+
+      <!-- 2.3 handle position -->
+      <div class="card">
+        <div class="card-header">
+          <span class="badge blue"><span class="dot"></span>P1 · 优化</span>
+          <span class="card-title">③ 节点连接端口语义化：横向 = 处理流，纵向 = 编辑流</span>
+        </div>
+        <div class="story">
+          <b>用户故事：</b> 未来视频节点可能要连"风格转换"、"加字幕"、"抽帧"等处理节点（横向）；
+          同时还要连到时间线做剪辑（纵向）。如果所有线都从右侧出，必然会打架。
+        </div>
+
+        <div class="diagram">
+          <svg viewBox="0 0 880 220" xmlns="http://www.w3.org/2000/svg">
+            <!-- Before -->
+            <text x="120" y="30" font-size="12" font-weight="700" fill="#C2410C" letter-spacing="1">现状 · 都挤在右侧</text>
+            <rect x="60" y="60" width="160" height="80" rx="10" fill="#FFFFFF" stroke="#56C7CF" stroke-width="2"/>
+            <text x="140" y="105" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">视频节点</text>
+            <circle cx="220" cy="100" r="6" fill="#14B8A6"/>
+            <path d="M226 100 L 290 80" stroke="#7C3AED" stroke-width="2" fill="none"/>
+            <text x="295" y="84" font-size="11" fill="#7C3AED">→ 时间线?</text>
+            <path d="M226 100 L 290 100" stroke="#94A3B8" stroke-width="2" fill="none"/>
+            <text x="295" y="104" font-size="11" fill="#94A3B8">→ 处理节点?</text>
+            <path d="M226 100 L 290 120" stroke="#94A3B8" stroke-width="2" fill="none"/>
+            <text x="295" y="124" font-size="11" fill="#94A3B8">→ 其他?</text>
+            <text x="140" y="170" font-size="11" fill="#C2410C" text-anchor="middle">三个用途共用一个端口，用户分不清</text>
+
+            <!-- After -->
+            <text x="600" y="30" font-size="12" font-weight="700" fill="#0E7490" letter-spacing="1">目标 · 按方向语义化</text>
+            <rect x="540" y="60" width="160" height="80" rx="10" fill="#FFFFFF" stroke="#56C7CF" stroke-width="2"/>
+            <text x="620" y="105" text-anchor="middle" font-size="12" fill="#0F172A" font-weight="600">视频节点</text>
+            <!-- right handle: source-process -->
+            <circle cx="700" cy="100" r="6" fill="#14B8A6"/>
+            <path d="M706 100 L 780 100" stroke="#14B8A6" stroke-width="2" fill="none"/>
+            <text x="785" y="104" font-size="11" fill="#0E7490">处理流</text>
+            <!-- bottom handle: source-timeline -->
+            <rect x="660" y="138" width="18" height="8" rx="4" fill="#F97316"/>
+            <path d="M669 148 L 669 195" stroke="#F97316" stroke-width="2" fill="none"/>
+            <text x="675" y="180" font-size="11" fill="#C2410C">编辑流 → 时间线</text>
+            <text x="620" y="60" font-size="11" fill="#0E7490" text-anchor="middle"></text>
+          </svg>
+        </div>
+
+        <h4>改动点</h4>
+        <ul class="spec-list">
+          <li><span class="k">视频节点</span><span class="v">
+            <code>GenerateVideoNode.tsx</code> 目前只有右侧 <code>id="out"</code>。
+            需要新增一个底部端口 <code>id="source-timeline"</code>（橙色胶囊，左偏 ~70%），
+            原右侧端口改名 <code>source-process</code> 表示"接其他处理节点"（保留，暂未使用）。
+          </span></li>
+          <li><span class="k">图片节点</span><span class="v">
+            <code>ImageNode.tsx</code> / <code>GenerateImageNode.tsx</code> <strong>已经有</strong> bottom 端口（橙色），
+            本次只需对齐视频节点。
+          </span></li>
+          <li><span class="k">连接逻辑</span><span class="v">
+            <code>mergeSelectionToTimeline</code> / <code>addNodeToTimeline</code> 创建 Edge 时，
+            <code>sourceHandle</code> 设为 <code>source-timeline</code>。
+          </span></li>
+        </ul>
+
+        <div class="callout note">
+          <b>设计原则一句话：</b> 横向走"处理"（素材 → 素材的处理结果），纵向走"编辑"（素材 → 时间线）。
+          用户不需要解释也能看懂。
+        </div>
+      </div>
+
+      <!-- 2.4 Empty shot hide -->
+      <div class="card">
+        <div class="card-header">
+          <span class="badge gray"><span class="dot"></span>P2 · 隐藏</span>
+          <span class="card-title">④ 空 Shot 功能逻辑保留，UI 入口暂时隐藏</span>
+        </div>
+        <div class="story">
+          <b>背景：</b> store 里 <code>addShot</code> 函数可以创建一个未绑定素材的空槽位（status=empty）。
+          这是一种"专业剪辑师"工作流——先排时序再填素材。MVP 阶段不暴露，避免普通用户困惑。
+        </div>
+        <ul class="spec-list">
+          <li><span class="k">保留</span><span class="v">store 的 <code>addShot</code> 函数、Shot 类型里的 <code>status: "empty"</code> 状态保持不变。</span></li>
+          <li><span class="k">隐藏</span><span class="v">UI 上找不到"新增空 Shot"的按钮/菜单项/快捷键。</span></li>
+          <li><span class="k">容错</span><span class="v">若数据中意外出现 empty 状态的 Shot，仍能正常渲染为灰色占位，不要崩。</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ─────────── 3. Canvas & Left Rail ─────────── -->
+    <section id="canvas">
+      <h2><span class="num">03</span>画布与左栏</h2>
+      <p class="section-intro">用户进入应用看到的"工作台"。它本身没什么逻辑，但所有功能的入口都在这里。</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><span class="card-title">顶部 Toolbar</span></div>
+          <p class="card-sub">PhanthyMovie 品牌 / 场景切换 / 返回项目 / 分享 / 通知 / 会员超市 / 星钻 / 头像。</p>
+          <p class="card-sub"><span class="badge gray">视觉占位</span> 目前仅有视觉，未挂接业务逻辑。</p>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">左栏 LeftRail</span></div>
+          <p class="card-sub">
+            <strong>+ 按钮（黑底）</strong>：唯一已联动的入口，打开"添加节点"面板。<br>
+            <strong>文件夹 / 网格 / 历史</strong>：占位，未实现。
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">添加节点面板 <span class="badge teal" style="margin-left:6px">已实现</span></span></div>
+          <p class="card-sub">三组入口：</p>
+          <ul class="spec-list">
+            <li><span class="k">节点</span><span class="v">文本（占位）/ 图片（generateImage）/ 视频（generateVideo）/ 音频（占位）</span></li>
+            <li><span class="k">资源</span><span class="v">上传（image）</span></li>
+            <li><span class="k">组装</span><span class="v">时间轴（timeline，NEW 标）</span></li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">底部 Dock</span></div>
+          <p class="card-sub">布局切换 / 适配视图 / 选择模式 / 缩放（25%–200%，10% 步进）。当前缩放为本地 state，未接入 ReactFlow 视图。</p>
+        </div>
+      </div>
+
+      <div class="callout note">
+        <b>画布操作（React Flow 默认）：</b>
+        鼠标左键拖动框选；右键拖动平移；滚轮缩放；右键弹出菜单（pane / node 两种语境）。
+        快捷键：<code>Ctrl+Z</code> 撤销，<code>Ctrl+Shift+Z</code> 重做。
+      </div>
+    </section>
+
+    <!-- ─────────── 4. Nodes ─────────── -->
+    <section id="nodes">
+      <h2><span class="num">04</span>节点系统</h2>
+      <p class="section-intro">
+        目前实现了 4 种节点：3 种素材节点（image / generateImage / generateVideo）+ 1 种容器节点（timeline）。
+        所有节点都是 React Flow 自定义 Node，注册在 <code>routes/index.tsx</code> 的 <code>nodeTypes</code>。
+      </p>
+
+      <div class="grid-2">
+        <div class="node-preview">
+          <div class="np-header">
+            <span class="badge teal"><span class="dot"></span>image</span>
+            <span class="np-title">图片节点</span>
+          </div>
+          <p class="np-meta">240 × 160，用于"上传素材"路径产出的图片。</p>
+          <div class="handle-list">
+            <div class="handle-row"><span class="handle-chip" style="background:#14B8A6"></span><b>source-process</b> · 右侧 · 接处理节点</div>
+            <div class="handle-row"><span class="handle-chip" style="background:#F97316; border-radius:0 0 5px 5px"></span><b>source-timeline</b> · 底部 · 接时间线</div>
+          </div>
+        </div>
+
+        <div class="node-preview">
+          <div class="np-header">
+            <span class="badge purple"><span class="dot"></span>generateImage</span>
+            <span class="np-title">AI 生图节点</span>
+          </div>
+          <p class="np-meta">240 × 160，可接受参考图片输入，点击"生成"模拟 AI 出图（2 秒延迟）。</p>
+          <div class="handle-list">
+            <div class="handle-row"><span class="handle-chip" style="background:#94A3B8"></span><b>in</b> · 左侧 · target 端口</div>
+            <div class="handle-row"><span class="handle-chip" style="background:#14B8A6"></span><b>source-process</b> · 右侧</div>
+            <div class="handle-row"><span class="handle-chip" style="background:#F97316; border-radius:0 0 5px 5px"></span><b>source-timeline</b> · 底部</div>
+          </div>
+        </div>
+
+        <div class="node-preview" style="grid-column: span 2">
+          <div class="np-header">
+            <span class="badge teal"><span class="dot"></span>generateVideo</span>
+            <span class="np-title">AI 视频节点 <span class="badge red" style="margin-left:6px">本轮要改</span></span>
+          </div>
+          <p class="np-meta">560 宽，含拖拽上传区 / 视频缩略，下方挂着"提示词面板" <code>VideoPromptPanel</code>。</p>
+          <div class="handle-list">
+            <div class="handle-row"><span class="handle-chip" style="background:#14B8A6; border-radius:0 5px 5px 0"></span><b>in</b> · 左侧 · target，青色胶囊</div>
+            <div class="handle-row"><span class="handle-chip" style="background:#14B8A6; border-radius:5px 0 0 5px"></span><b>out</b> · 右侧 · 唯一 source <span class="badge amber" style="margin-left:6px">本轮要拆成两个</span></div>
+          </div>
+          <div class="callout warn" style="margin-top:14px">
+            <b>差异：</b> 目前视频节点只在右侧有一个 source 端口，所有去时间线的连接都从这里出。
+            按"② 两条路径"和"③ 端口语义化"的方案，应拆成 <code>source-process</code>（右）+ <code>source-timeline</code>（底偏右）。
+          </div>
+        </div>
+
+        <div class="node-preview" style="grid-column: span 2">
+          <div class="np-header">
+            <span class="badge orange"><span class="dot"></span>timeline</span>
+            <span class="np-title">时间线节点</span>
+          </div>
+          <p class="np-meta">1800 宽，深色面板。包含：头部（播放控制 / 工具按钮）+ 标尺 + 多轨道编辑区。</p>
+          <div class="handle-list">
+            <div class="handle-row"><span class="handle-chip" style="background:#56C7CF"></span><b>port-1 / port-2 / port-3 ...</b> · 每个 Shot 对应一个 target 端口，颜色随 Shot 颜色</div>
+          </div>
+          <p class="card-sub" style="margin-top:10px"><span class="badge red">当前问题</span> 渲染层硬编码了三个 clip（INITIAL_CLIPS），未读取 store 的 <code>data.shots</code>。详见<a class="em-link" href="#iteration">本轮迭代 ①</a>。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── 5. Timeline & Shots ─────────── -->
+    <section id="timeline">
+      <h2><span class="num">05</span>时间线与镜头</h2>
+      <p class="section-intro">
+        时间线本质是一个<strong>容器</strong>，里面装着若干 Shot（镜头）。整个产品的"时序"概念都在 Shot 上。
+      </p>
+
+      <h3>Shot 数据模型</h3>
+      <pre><code>interface Shot {
+  id: string;              // 唯一 ID
+  name: string;            // 显示名（可在属性面板编辑）
+  index: number;           // 在 Timeline 中的顺序
+  duration: number;        // 在片中的时长（秒）
+  sourceIn: number;        // 源素材入点（秒）
+  sourceOut: number;       // 源素材出点（秒）
+  bindings: string[];      // 绑定的素材节点 ID 列表
+  thumbnail?: string;      // 缩略图 URL（来自素材）
+  color: "cyan" | "purple" | "yellow" | "gray";
+  status: "empty" | "ready" | "generating" | "failed";
+}</code></pre>
+
+      <h3>Shot 状态机</h3>
+      <div class="status-row">
+        <span class="status-pill"><b style="color:#94A3B8">●</b> empty · 未绑定素材的占位</span>
+        <span class="status-pill"><b style="color:#22C55E">●</b> ready · 已绑定，可导出</span>
+        <span class="status-pill"><b style="color:#F59E0B">●</b> generating · AI 生成中</span>
+        <span class="status-pill"><b style="color:#EF4444">●</b> failed · 生成失败</span>
+      </div>
+      <p class="card-sub" style="margin-top:10px">
+        本轮迭代 <strong>empty</strong> 不暴露 UI 入口；<strong>generating / failed</strong> 当前未在 UI 中区分渲染（待补）。
+      </p>
+
+      <h3>Timeline 容器属性</h3>
+      <ul class="spec-list">
+        <li><span class="k">width</span><span class="v">画布上 Timeline 的总宽（默认 1200 / Mock 1800）</span></li>
+        <li><span class="k">pxPerSecond</span><span class="v">每秒对应像素数（默认 60），决定 clip 在轨道上的宽度</span></li>
+        <li><span class="k">shots</span><span class="v">Shot 数组，顺序即播放顺序</span></li>
+      </ul>
+
+      <h3>Timeline 头部操作（按钮已在 UI，多数未联动）</h3>
+      <div class="tag-row">
+        <span class="badge teal">▶ 播放/暂停</span>
+        <span class="badge gray">📥 导出</span>
+        <span class="badge gray">✂️ 裁剪</span>
+        <span class="badge gray">🔍 搜索</span>
+        <span class="badge gray">🧲 吸附</span>
+        <span class="badge gray">🔒 锁定</span>
+        <span class="badge gray">＋ 添加</span>
+        <span class="badge gray">字幕 / 特效 / 音乐</span>
+      </div>
+      <p class="card-sub" style="margin-top:10px">本期不要求都实现，但 UI 已经画好，开发同学心里有数即可。</p>
+    </section>
+
+    <!-- ─────────── 6. Edges ─────────── -->
+    <section id="edges">
+      <h2><span class="num">06</span>连接关系（两条路径详解）</h2>
+      <p class="section-intro">
+        画布上任何"素材 → 时间线"的关系都通过 Edge 表达。所有 Edge 都有颜色，颜色与目标 Shot 一致。
+      </p>
+
+      <h3>Edge 数据模型</h3>
+      <pre><code>interface Edge {
+  id: string;              // 唯一 ID
+  from: string;            // 源节点 ID（素材）
+  to: string;              // 目标 ID（Timeline 节点 ID 或 Shot ID）
+  toHandle?: string;       // 目标端口（Shot ID）
+  color?: string;          // 边颜色，与 Shot color 一致
+}</code></pre>
+
+      <h3>路径 A：自动串联</h3>
+      <ol class="steps">
+        <li><b>用户操作</b>在画布上按住框选或 Shift 多选 ≥2 个素材节点。</li>
+        <li><b>触发 UI</b>顶部浮出 <code>MultiSelectionCTA</code> 胶囊："已选中 N 个素材 · 合并到时间轴"。</li>
+        <li><b>用户确认</b>点击胶囊里的 CTA。</li>
+        <li><b>store 行为</b>调用 <code>mergeSelectionToTimeline(nodeIds)</code>：
+          <ul style="margin-top:6px">
+            <li>过滤出 media 类型节点，按 x（次 y）排序</li>
+            <li>在选区下方位置新建 Timeline 节点</li>
+            <li>为每个素材创建一个 Shot，继承 <code>duration</code> 和 <code>src</code> 作为 thumbnail</li>
+            <li>为每个素材 → Timeline 创建一条 Edge，颜色按素材类型映射</li>
+            <li>选中新建的 Timeline，打开属性面板</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3>路径 B：手动连接</h3>
+      <ol class="steps">
+        <li><b>用户操作</b>从左栏添加一个空 Timeline 节点（也可以从已有 Timeline 继续追加）。</li>
+        <li><b>用户拖线</b>从素材节点的底部 <code>source-timeline</code> 端口拖一条线，松手在 Timeline 节点上。</li>
+        <li><b>React Flow 回调</b><code>onConnect</code> 检测到目标是 timeline，直接转发到 store；
+          若用户拖到空白处但鼠标停在 Timeline 卡片上，<code>onConnectEnd</code> 通过 <code>document.elementsFromPoint</code> 兜底识别。</li>
+        <li><b>store 行为</b>调用 <code>addNodeToTimeline(nodeId)</code>：
+          <ul style="margin-top:6px">
+            <li>取最新创建的 Timeline（若无，则新建一个，把当前素材作为第一个 Shot）</li>
+            <li>在末尾追加 Shot，继承 duration / thumbnail</li>
+            <li>创建带颜色的 Edge，<code>toHandle</code> 指向新 Shot ID</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h3>右键菜单的补充路径</h3>
+      <p class="card-sub">
+        在素材节点上右键 → "加入到最近的时间轴 / 新建时间轴并加入"。
+        与路径 B 行为一致，只是入口不同（适合手不离右键的用户）。
+      </p>
+
+      <div class="callout success">
+        <b>三条路径，一个出口：</b> 不论用户走 A / B / 右键，最终都落到 store 的两个函数：
+        <code>mergeSelectionToTimeline</code>（批量）/ <code>addNodeToTimeline</code>（单个）。
+        Edge 创建逻辑统一，保证视觉一致。
+      </div>
+    </section>
+
+    <!-- ─────────── 7. Properties & Context Menu ─────────── -->
+    <section id="properties">
+      <h2><span class="num">07</span>右键菜单与属性面板</h2>
+      <p class="section-intro">两种编辑入口：右键菜单（动作类）+ 属性面板（属性类）。</p>
+
+      <h3>右键菜单 ContextMenu</h3>
+      <p class="card-sub">根据上下文动态生成菜单项。三种语境：</p>
+      <div class="grid-3">
+        <div class="card flat">
+          <h4 style="margin-top:0">在空白画布</h4>
+          <ul class="spec-list">
+            <li><span class="k">📤</span><span class="v">上传 <span class="badge gray">未实现</span></span></li>
+            <li><span class="k">＋</span><span class="v">添加节点 <span class="badge gray">未实现</span></span></li>
+            <li><span class="k">↶</span><span class="v">撤销（Ctrl+Z）</span></li>
+            <li><span class="k">📋</span><span class="v">粘贴 <span class="badge gray">未实现</span></span></li>
+          </ul>
+        </div>
+        <div class="card flat">
+          <h4 style="margin-top:0">在素材节点上</h4>
+          <ul class="spec-list">
+            <li><span class="k">🎬</span><span class="v"><b>加入到最近的时间轴</b><br>（无 Timeline 时显示"新建时间轴并加入"）</span></li>
+            <li><span class="k">📤</span><span class="v">上传 / 添加节点 / 撤销 / 复制 / 粘贴</span></li>
+            <li><span class="k">🗑</span><span class="v">删除节点（红色，强调）</span></li>
+          </ul>
+        </div>
+        <div class="card flat">
+          <h4 style="margin-top:0">在 Timeline 节点上</h4>
+          <ul class="spec-list">
+            <li><span class="k">通用项</span><span class="v">上传 / 添加节点 / 撤销 / 复制 / 粘贴</span></li>
+            <li><span class="k">🗑</span><span class="v">删除节点（会同时移除所有指向它的 Edge）</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>属性面板 PropertiesPanel</h3>
+      <p class="card-sub">画布右侧 frosted 抽屉，选中节点或选中某个 Shot 时打开。</p>
+      <div class="grid-2">
+        <div class="card flat">
+          <h4 style="margin-top:0">选中节点</h4>
+          <ul class="spec-list">
+            <li><span class="k">ID</span><span class="v">只读</span></li>
+            <li><span class="k">类型</span><span class="v">只读</span></li>
+            <li><span class="k">名称</span><span class="v">可编辑（受控输入）</span></li>
+            <li><span class="k">缩略图</span><span class="v">若有 <code>src</code> 字段则显示</span></li>
+          </ul>
+        </div>
+        <div class="card flat">
+          <h4 style="margin-top:0">选中 Shot</h4>
+          <ul class="spec-list">
+            <li><span class="k">名称</span><span class="v">可编辑</span></li>
+            <li><span class="k">时长</span><span class="v">数字输入，步进 0.1s</span></li>
+            <li><span class="k">入点</span><span class="v">数字输入</span></li>
+            <li><span class="k">状态</span><span class="v">只读（empty/ready/...）</span></li>
+            <li><span class="k">绑定</span><span class="v">显示素材 ID 列表</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── 8. Export ─────────── -->
+    <section id="export">
+      <h2><span class="num">08</span>导出</h2>
+      <p class="section-intro">产品最终交付：用户能拿到能在 Final Cut Pro / 达芬奇等专业软件里继续编辑的工程文件。</p>
+
+      <div class="grid-2">
+        <div class="card flat">
+          <h4 style="margin-top:0">FCPXML</h4>
+          <p class="card-sub">Final Cut Pro X 工程文件。基于 24fps 计算时间码，按 Shot 顺序拼接 clip。</p>
+        </div>
+        <div class="card flat">
+          <h4 style="margin-top:0">EDL</h4>
+          <p class="card-sub">Edit Decision List，传统剪辑交换格式。每行一个剪辑点，含源入/源出/记录入/记录出。</p>
+        </div>
+      </div>
+
+      <h3>导出弹窗（已实现）</h3>
+      <ul class="spec-list">
+        <li><span class="k">入口</span><span class="v">Timeline 节点头部"下载"按钮（当前为示意，待挂接）/ 演示流程结尾自动打开</span></li>
+        <li><span class="k">内容</span><span class="v">只读 textarea 显示生成的 XML / EDL 文本</span></li>
+        <li><span class="k">操作</span><span class="v">复制到剪贴板 · 确认下载（Mock：仅关闭弹窗）</span></li>
+      </ul>
+
+      <div class="callout note">
+        <b>注意：</b> 目前导出只取"第一个 Timeline"的 shots。如果未来支持多 Timeline，
+        需要让用户选择导出哪一个，或为每个 Timeline 提供独立的导出入口。
+      </div>
+    </section>
+
+    <!-- ─────────── 9. State ─────────── -->
+    <section id="state">
+      <h2><span class="num">09</span>状态管理与数据模型</h2>
+      <p class="section-intro">
+        全局状态用 Zustand（<code>src/store/canvasStore.ts</code>）。所有的写操作都先 <code>pushHistory()</code> 入栈，支持 50 步撤销/重做。
+      </p>
+
+      <h3>核心状态字段</h3>
+      <pre><code>{
+  projectName: string;                  // 顶部标题
+  nodes: CanvasNode[];                  // 所有节点（含 timeline）
+  edges: Edge[];                        // 所有连接边
+  selectedId: string | null;            // 选中的节点 ID
+  selectedShotId: string | null;        // 选中的 Shot ID
+  panelOpen: boolean;                   // 属性面板开关
+  exportOpen: false | "fcpxml" | "edl"; // 导出弹窗类型
+  contextMenu: ContextMenuState | null; // 右键菜单位置
+  past: Snapshot[];  future: Snapshot[];// 撤销栈
+}</code></pre>
+
+      <h3>关键 Action</h3>
+      <ul class="spec-list">
+        <li><span class="k">addNode</span><span class="v">从左栏添加一个节点（image / generateImage / generateVideo / timeline）</span></li>
+        <li><span class="k">removeNode</span><span class="v">删除节点，同时清除指向它的所有 Edge</span></li>
+        <li><span class="k">addEdge</span><span class="v">通用边创建。若目标是 Shot，自动调用 <code>bindNodeToShot</code></span></li>
+        <li><span class="k">mergeSelectionToTimeline</span><span class="v"><b>路径 A 核心</b>：批量素材 → 新 Timeline + Shots + Edges</span></li>
+        <li><span class="k">addNodeToTimeline</span><span class="v"><b>路径 B 核心</b>：单个素材追加到最近 Timeline 末尾（无则新建）</span></li>
+        <li><span class="k">bindNodeToShot</span><span class="v">把素材绑定到特定 Shot（更新 bindings / color / thumbnail / status）</span></li>
+        <li><span class="k">addShot / removeShot / updateShot / reorderShots</span><span class="v">Shot 的增删改 + 排序</span></li>
+        <li><span class="k">undo / redo</span><span class="v">基于 Snapshot 的撤销栈</span></li>
+      </ul>
+    </section>
+
+    <!-- ─────────── 10. TODO ─────────── -->
+    <section id="todo">
+      <h2><span class="num">10</span>遗留 TODO（代码里标注的）</h2>
+      <p class="section-intro">代码里有几处 <code>TODO</code> 注释，本期不要求做但建议团队心里有数：</p>
+      <ul class="spec-list">
+        <li><span class="k">文本/音频节点</span><span class="v">AddNodePanel 里两种节点是占位，需要新增对应 Node 组件 + store 类型。</span></li>
+        <li><span class="k">真上传</span><span class="v">右键"上传" + Toolbar 上传按钮都未挂接文件选择器和上传逻辑。</span></li>
+        <li><span class="k">复制/粘贴</span><span class="v">ContextMenu 的"复制节点 / 粘贴"是 disabled 状态。需要剪贴板 store 和反序列化。</span></li>
+        <li><span class="k">Timeline 头部操作</span><span class="v">播放、裁剪、字幕、特效、音乐等按钮目前只是 UI。</span></li>
+        <li><span class="k">缩放联动</span><span class="v">BottomDock 的缩放百分比是本地 state，未与 React Flow viewport 同步。</span></li>
+        <li><span class="k">多 Timeline 导出</span><span class="v">导出只取第一个 Timeline，未来支持多条时需要用户选择。</span></li>
+      </ul>
+    </section>
+
+    <!-- ─────────── 11. Acceptance ─────────── -->
+    <section id="acceptance">
+      <h2><span class="num">11</span>本轮迭代验收清单</h2>
+      <p class="section-intro">开发完成后，按下面这张清单走一遍，全绿才算交付。</p>
+
+      <table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top: 10px;">
+        <thead>
+          <tr style="background:#F8FAFC; text-align:left;">
+            <th style="padding:10px 14px; border-bottom:1px solid var(--line); font-weight:600;">#</th>
+            <th style="padding:10px 14px; border-bottom:1px solid var(--line); font-weight:600;">场景</th>
+            <th style="padding:10px 14px; border-bottom:1px solid var(--line); font-weight:600;">期望结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">①.1</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">清空 mockData 后打开应用</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">空画布，无任何"古风"预置内容</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">①.2</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">添加 3 个视频 → 多选 → 合并</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">时间线里出现 3 个 Shot，缩略图来自这 3 个视频</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">①.3</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">删除 Timeline 中的一个 Shot</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">UI 立即少一个 clip；指向它的 Edge 也消失</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">②.1</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">多选 3 个素材 → 点 CTA</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">下方出现 Timeline + 3 条不同颜色的连接线（青/紫/橙）</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">②.2</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">从左栏建空 Timeline → 拖一个视频上去</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">Timeline 里出现 1 个 Shot + 1 条带颜色连接线</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">②.3</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">连接线视觉</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">每条 Edge 颜色与对应 Shot 色卡颜色一致，不是默认灰</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">③.1</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">视频节点视觉</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">节点底部出现新端口（橙色胶囊，距左 ~70%）</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">③.2</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">自动建轴的连接线</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">连接线从节点底部出发，不再从右侧出发</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">④.1</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">扫描 UI</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">用户找不到任何"新增空 Shot"的入口</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-mute);">④.2</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">数据兼容</td>
+            <td style="padding:10px 14px; border-bottom:1px solid var(--line);">手动注入一个 status=empty 的 Shot，UI 仍能正常渲染灰色占位</td>
+          </tr>
+          <tr>
+            <td style="padding:10px 14px; color:var(--ink-mute);">回归</td>
+            <td style="padding:10px 14px;">导出 FCPXML / EDL</td>
+            <td style="padding:10px 14px;">导出内容包含当前 Timeline 的真实 Shot 列表</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      <div>PhanthyMovie · 关键帧（CanvasFlow Studio）· 产品逻辑说明 v0.1</div>
+      <div style="margin-top:6px">本文档由产品基于代码仓库自动梳理生成，供本周开发对齐会使用。改完后请同步回滚反馈。</div>
+    </footer>
+  </main>
+</div>
+
+<script>
+  // Make nav anchors smooth-scroll + highlight active
+  const links = document.querySelectorAll('.nav-link[data-anchor]');
+  const sections = Array.from(links).map(l => document.getElementById(l.dataset.anchor)).filter(Boolean);
+
+  links.forEach(l => {
+    l.addEventListener('click', () => {
+      const id = l.dataset.anchor;
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  function onScroll() {
+    const y = window.scrollY + 120;
+    let activeIdx = 0;
+    sections.forEach((s, i) => { if (s.offsetTop <= y) activeIdx = i; });
+    links.forEach((l, i) => l.classList.toggle('active', i === activeIdx));
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+</script>
+</body>
+</html>

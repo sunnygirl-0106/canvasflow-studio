@@ -56,12 +56,12 @@ export function FullscreenPlayer({ shots, currentTime, totalDuration, playing, o
       onClick={onTogglePlay}
     >
       {/* Video area */}
-      <div className="flex-1 flex items-center justify-center relative">
+      <div className="flex-1 min-h-0 flex items-center justify-center relative overflow-hidden">
         {activeShot?.thumbnail ? (
           <img
             src={activeShot.thumbnail}
             alt=""
-            className="max-w-full max-h-full object-contain"
+            className="w-full h-full object-contain"
             draggable={false}
           />
         ) : (

@@ -1,4 +1,4 @@
-import { Play, Pause, Maximize2 } from "lucide-react";
+import { Play } from "lucide-react";
 import type { Shot } from "@/store/canvasStore";
 
 const CLIP_STYLES: Record<Shot["color"], { border: string }> = {
@@ -36,13 +36,13 @@ export function PreviewStage({ shots, currentTime, playing, onTogglePlay, onFull
   return (
     <div
       className="relative flex-1 flex items-center justify-center overflow-hidden"
-      style={{ background: "#000", minHeight: 200 }}
+      style={{ background: "#000", minHeight: 300 }}
     >
       {activeShot?.thumbnail ? (
         <img
           src={activeShot.thumbnail}
           alt=""
-          className="max-w-full max-h-full object-contain"
+          className="w-full h-full object-contain"
           draggable={false}
         />
       ) : (
@@ -74,30 +74,6 @@ export function PreviewStage({ shots, currentTime, playing, onTogglePlay, onFull
         </div>
       )}
 
-      {/* Bottom-right controls */}
-      <div className="absolute bottom-3 right-4 flex items-center gap-1">
-        <button
-          onClick={onTogglePlay}
-          className="flex items-center justify-center rounded-lg hover:bg-white/10"
-          style={{ width: 32, height: 32 }}
-        >
-          {playing ? (
-            <Pause className="w-4 h-4" style={{ color: "#F1F5F9" }} />
-          ) : (
-            <Play className="w-4 h-4" style={{ color: "#F1F5F9" }} />
-          )}
-        </button>
-        {onFullscreen && (
-          <button
-            onClick={onFullscreen}
-            className="flex items-center justify-center rounded-lg hover:bg-white/10"
-            style={{ width: 32, height: 32 }}
-            title="全屏预览"
-          >
-            <Maximize2 className="w-4 h-4" style={{ color: "#F1F5F9" }} />
-          </button>
-        )}
-      </div>
     </div>
   );
 }

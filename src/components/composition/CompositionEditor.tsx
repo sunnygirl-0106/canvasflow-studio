@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Maximize2 } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 import { EditorTopBar } from "./EditorTopBar";
 import { PreviewStage } from "./PreviewStage";
 import { TrackTimeline } from "./TrackTimeline";
 import { EditorToolbar } from "./EditorToolbar";
+import { PlaybackControls } from "./PlaybackControls";
 import { SpeedPanel } from "./SpeedPanel";
 import { ZoomControls } from "./ZoomControls";
 import { FullscreenPlayer } from "./FullscreenPlayer";
@@ -23,6 +23,7 @@ export function CompositionEditor() {
   const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX_PER_SEC);
   const [speedOpen, setSpeedOpen] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [muted, setMuted] = useState(false);
 
   const comp = nodes.find((n) => n.id === editorCompId);
   const shots = comp?.data.shots ?? [];
@@ -119,34 +120,6 @@ export function CompositionEditor() {
         </>
       )}
 
-      {/* Collapsed mode: small preview window in top-left */}
-      {!isFull && (
-        <div
-          className="absolute top-4 left-4 rounded-xl overflow-hidden"
-          style={{
-            width: 280,
-            height: 180,
-            background: "#000",
-            boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
-            border: "1px solid #334155",
-            pointerEvents: "auto",
-            zIndex: 42,
-          }}
-        >
-          <PreviewStage
-            shots={shots}
-            currentTime={currentTime}
-            playing={playing}
-            onTogglePlay={handleTogglePlay}
-            onFullscreen={() => {
-              setFullscreenOpen(true);
-              setCurrentTime(0);
-              setPlaying(true);
-            }}
-          />
-        </div>
-      )}
-
       {/* Bottom panel: toolbar + track + zoom */}
       <div
         className="mt-auto flex flex-col"
@@ -157,16 +130,15 @@ export function CompositionEditor() {
           boxShadow: isFull ? "none" : "0 -8px 24px rgba(0,0,0,0.3)",
         }}
       >
-        {/* Toolbar row: editor tools on left, zoom on right */}
+        {/* Toolbar row: left(editor tools) / center(playback) / right(zoom) */}
         <div className="flex items-center justify-between" style={{ background: "#1E293B" }}>
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <EditorToolbar
               compId={editorCompId}
               currentTime={currentTime}
               selectedClipId={selectedClipId}
               onOpenSpeed={() => setSpeedOpen((o) => !o)}
             />
-            {/* Speed panel (positioned above toolbar) */}
             {speedOpen && selectedClipId && (
               <SpeedPanel
                 compId={editorCompId}
@@ -175,7 +147,22 @@ export function CompositionEditor() {
               />
             )}
           </div>
-          <ZoomControls pxPerSec={pxPerSec} onZoom={setPxPerSec} />
+          <div className="flex-1 flex justify-center">
+            <PlaybackControls
+              currentTime={currentTime}
+              totalDuration={totalDuration}
+              playing={playing}
+              onTogglePlay={handleTogglePlay}
+              onFullscreen={() => {
+                setFullscreenOpen(true);
+                setCurrentTime(0);
+                setPlaying(true);
+              }}
+            />
+          </div>
+          <div className="flex-shrink-0">
+            <ZoomControls pxPerSec={pxPerSec} onZoom={setPxPerSec} />
+          </div>
         </div>
 
         {/* Track */}
@@ -186,6 +173,8 @@ export function CompositionEditor() {
           pxPerSec={pxPerSec}
           selectedClipId={selectedClipId}
           onSeek={handleSeek}
+          muted={muted}
+          onToggleMute={() => setMuted((m) => !m)}
         />
       </div>
     </div>

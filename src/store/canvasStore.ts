@@ -175,11 +175,32 @@ export const useCanvas = create<State>((set, get) => ({
 
   setNodes: (nodes) => set({ nodes }),
   updateNode: (id, patch) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) =>
+    set((s) => {
+      const updated = s.nodes.map((n) =>
         n.id === id ? (typeof patch === "function" ? patch(n) : { ...n, ...patch, data: { ...n.data, ...(patch as any).data } }) : n,
-      ),
-    })),
+      );
+      // Propagate src changes to bound shots' thumbnails
+      const changedNode = updated.find((n) => n.id === id);
+      if (changedNode?.data.src) {
+        return {
+          nodes: updated.map((n) => {
+            if (!n.data.shots) return n;
+            const hasBinding = n.data.shots.some((sh: Shot) => sh.bindings.includes(id));
+            if (!hasBinding) return n;
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                shots: n.data.shots.map((sh: Shot) =>
+                  sh.bindings.includes(id) ? { ...sh, thumbnail: changedNode.data.src } : sh,
+                ),
+              },
+            };
+          }),
+        };
+      }
+      return { nodes: updated };
+    }),
 
   addNode: (kind) => {
     get().pushHistory();
@@ -234,7 +255,11 @@ export const useCanvas = create<State>((set, get) => ({
     set((s) => ({ edges: s.edges.filter((e) => e.id !== id) }));
   },
 
-  select: (id) => set({ selectedId: id, selectedShotId: null, panelOpen: !!id }),
+  select: (id) => set((s) => {
+    const node = id ? s.nodes.find((n) => n.id === id) : null;
+    const showPanel = !!id && node?.kind !== "generateVideo";
+    return { selectedId: id, selectedShotId: null, panelOpen: showPanel };
+  }),
   selectShot: (id) => set({ selectedShotId: id, selectedId: null, panelOpen: !!id }),
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
   setExport: (v) => set({ exportOpen: v }),

@@ -58,7 +58,7 @@ export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed
     <div
       className="flex items-center gap-1 flex-shrink-0"
       style={{
-        height: 44,
+        height: 40,
         padding: "0 12px",
         background: "#1E293B",
         borderTop: "1px solid #334155",
@@ -83,15 +83,11 @@ export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed
         <ArrowLeftToLine className="w-4 h-4" style={iconStyle} />
       </button>
 
-      {/* Speed — only when clip selected */}
-      {selectedClipId && (
-        <>
-          <div className="w-px h-5 mx-1" style={{ background: "#334155" }} />
-          <button onClick={onOpenSpeed} className={btnClass} style={btnStyle} title="变速">
-            <Gauge className="w-4 h-4" style={iconStyle} />
-          </button>
-        </>
-      )}
+      {/* Speed — disabled when no clip selected */}
+      <div className="w-px h-5 mx-1" style={{ background: "#334155" }} />
+      <button onClick={onOpenSpeed} disabled={!selectedClipId} className={btnClass} style={btnStyle} title="变速">
+        <Gauge className="w-4 h-4" style={{ color: selectedClipId ? "#94A3B8" : "#475569" }} />
+      </button>
     </div>
   );
 }

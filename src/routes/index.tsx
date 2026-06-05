@@ -28,7 +28,6 @@ import { MultiSelectionCTA } from "@/components/MultiSelectionCTA";
 import { CompositionCoachToast } from "@/components/CompositionCoachToast";
 import { ContextMenu } from "@/components/ContextMenu";
 import { CompositionEditor } from "@/components/composition/CompositionEditor";
-import { Wand2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({ component: IndexPage });
 
@@ -51,7 +50,6 @@ function Workspace() {
         <PropertiesPanel />
         <CompositionCoachToast />
         <ContextMenu />
-        <DemoButton />
       </div>
       <CompositionEditor />
       <ExportDialog />
@@ -234,46 +232,3 @@ function findHostNodeId(nodes: any[], id: string): string {
   return id;
 }
 
-function DemoButton() {
-  const nodes = useCanvas.getState().nodes;
-  const setExport = useCanvas((s) => s.setExport);
-  const updateShot = useCanvas((s) => s.updateShot);
-  const bind = useCanvas((s) => s.bindNodeToShot);
-
-  const run = async () => {
-    const tl = useCanvas.getState().nodes.find((n) => n.kind === "composition");
-    if (!tl) return;
-    const shots = tl.data.shots ?? [];
-    // 1. bind shot 04 (index 3) to img-2
-    const target = shots[3];
-    if (target) {
-      bind("img-2", target.id);
-    }
-    await wait(900);
-    // 2. shrink shot 02 from 5.6 -> 3
-    const s2 = shots[1];
-    if (s2) {
-      for (let d = s2.duration; d >= 3; d -= 0.2) {
-        updateShot(tl.id, s2.id, { duration: Math.round(d * 10) / 10 });
-        await wait(40);
-      }
-    }
-    await wait(500);
-    // 3. trigger play (visual via custom event)
-    window.dispatchEvent(new CustomEvent("wb:play", { detail: { tlId: tl.id } }));
-    await wait(2500);
-    // 4. open export
-    setExport("fcpxml");
-  };
-
-  return (
-    <button
-      onClick={run}
-      className="absolute top-3 right-4 z-30 flex items-center gap-1.5 text-xs bg-accent text-accent-foreground px-3 py-2 rounded-full font-medium hover:opacity-90 node-shadow"
-    >
-      <Wand2 className="w-3.5 h-3.5" /> 演示流程
-    </button>
-  );
-}
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
