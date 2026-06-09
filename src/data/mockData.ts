@@ -1,136 +1,27 @@
 import type { CanvasNode, Edge } from "@/store/canvasStore";
 
-const IMG_A = "https://picsum.photos/seed/cf-a/400/225";
-const IMG_B = "https://picsum.photos/seed/cf-b/400/225";
-
-// Demo scene: two image nodes + an audio node feeding a composition that already
-// has V1 (2 clips), V2 (1 overlapping clip for picture-in-picture) and A1 (audio).
 export const initialNodes: CanvasNode[] = [
-  { id: "img-a", kind: "image", x: 120, y: 120, data: { name: "海边", src: IMG_A, duration: 3 } },
-  { id: "img-b", kind: "image", x: 120, y: 340, data: { name: "山林", src: IMG_B, duration: 3 } },
-  {
-    id: "audio-bgm",
-    kind: "audio",
-    x: 120,
-    y: 560,
-    data: { name: "背景音乐", duration: 5, waveform: "" },
-  },
-  {
-    id: "comp-demo",
-    kind: "composition",
-    x: 560,
-    y: 280,
-    data: {
-      name: "视频合成 1",
-      width: 1200,
-      pxPerSecond: 60,
-      tracks: [
-        {
-          id: "track-v1",
-          kind: "video",
-          name: "V1",
-          clips: [
-            {
-              id: "clip-a",
-              name: "海边 · 01",
-              index: 0,
-              startSec: 0,
-              duration: 3,
-              baseDuration: 3,
-              speed: 1,
-              sourceIn: 0,
-              sourceOut: 3,
-              bindings: ["img-a"],
-              thumbnail: IMG_A,
-              color: "cyan",
-              status: "ready",
-              clipKind: "video",
-            },
-            {
-              id: "clip-b",
-              name: "山林 · 02",
-              index: 1,
-              startSec: 3,
-              duration: 3,
-              baseDuration: 3,
-              speed: 1,
-              sourceIn: 0,
-              sourceOut: 3,
-              bindings: ["img-b"],
-              thumbnail: IMG_B,
-              color: "purple",
-              status: "ready",
-              clipKind: "video",
-            },
-          ],
-        },
-        {
-          id: "track-v2",
-          kind: "video",
-          name: "V2",
-          clips: [
-            {
-              id: "clip-c",
-              name: "山林 · 叠加",
-              index: 0,
-              startSec: 1,
-              duration: 2,
-              baseDuration: 2,
-              speed: 1,
-              sourceIn: 0,
-              sourceOut: 2,
-              bindings: ["img-b"],
-              thumbnail: IMG_B,
-              color: "yellow",
-              status: "ready",
-              clipKind: "video",
-            },
-          ],
-        },
-        {
-          id: "track-a1",
-          kind: "audio",
-          name: "A1",
-          clips: [
-            {
-              id: "clip-audio",
-              name: "背景音乐",
-              index: 0,
-              startSec: 0,
-              duration: 5,
-              baseDuration: 5,
-              speed: 1,
-              sourceIn: 0,
-              sourceOut: 5,
-              bindings: ["audio-bgm"],
-              color: "gray",
-              status: "ready",
-              clipKind: "audio",
-              muted: false,
-            },
-          ],
-        },
-      ],
-    },
-  },
+  // 9 images
+  { id: "img-1", kind: "image", x: 80,  y: 60,  data: { name: "海边日落", src: "https://picsum.photos/seed/cf-1/400/225" } },
+  { id: "img-2", kind: "image", x: 420, y: 30,  data: { name: "山林晨雾", src: "https://picsum.photos/seed/cf-2/400/225" } },
+  { id: "img-3", kind: "image", x: 760, y: 90,  data: { name: "古镇小巷", src: "https://picsum.photos/seed/cf-3/400/225" } },
+  { id: "img-4", kind: "image", x: 150, y: 320, data: { name: "雪山湖泊", src: "https://picsum.photos/seed/cf-4/400/225" } },
+  { id: "img-5", kind: "image", x: 500, y: 280, data: { name: "沙漠驼铃", src: "https://picsum.photos/seed/cf-5/400/225" } },
+  { id: "img-6", kind: "image", x: 830, y: 340, data: { name: "竹林深处", src: "https://picsum.photos/seed/cf-6/400/225" } },
+  { id: "img-7", kind: "image", x: 60,  y: 560, data: { name: "江南水乡", src: "https://picsum.photos/seed/cf-7/400/225" } },
+  { id: "img-8", kind: "image", x: 440, y: 530, data: { name: "草原星空", src: "https://picsum.photos/seed/cf-8/400/225" } },
+  { id: "img-9", kind: "image", x: 780, y: 580, data: { name: "梯田日出", src: "https://picsum.photos/seed/cf-9/400/225" } },
+
+  // 3 videos
+  { id: "vid-1", kind: "generateVideo", x: 1140, y: 80,  data: { name: "山间溪流", src: "https://picsum.photos/seed/cf-v1/400/225", duration: 5 } },
+  { id: "vid-2", kind: "generateVideo", x: 1160, y: 310, data: { name: "城市夜景", src: "https://picsum.photos/seed/cf-v2/400/225", duration: 4 } },
+  { id: "vid-3", kind: "generateVideo", x: 1120, y: 550, data: { name: "烟花绽放", src: "https://picsum.photos/seed/cf-v3/400/225", duration: 6 } },
+
+  // 4 audios
+  { id: "aud-1", kind: "audio", x: 1480, y: 50,  data: { name: "古筝曲", duration: 8, waveform: "" } },
+  { id: "aud-2", kind: "audio", x: 1520, y: 240, data: { name: "雨声白噪音", duration: 12, waveform: "" } },
+  { id: "aud-3", kind: "audio", x: 1460, y: 430, data: { name: "笛子独奏", duration: 6, waveform: "" } },
+  { id: "aud-4", kind: "audio", x: 1500, y: 600, data: { name: "鸟鸣晨曲", duration: 10, waveform: "" } },
 ];
 
-export const initialEdges: Edge[] = [
-  {
-    id: "e-a",
-    from: "img-a",
-    to: "comp-demo",
-    sourceHandle: "source-process",
-    toHandle: "comp-in",
-    color: "#56C7CF",
-  },
-  {
-    id: "e-b",
-    from: "img-b",
-    to: "comp-demo",
-    sourceHandle: "source-process",
-    toHandle: "comp-in",
-    color: "#7C3AED",
-  },
-  { id: "e-audio", from: "audio-bgm", to: "comp-demo", color: "#94A3B8" },
-];
+export const initialEdges: Edge[] = [];

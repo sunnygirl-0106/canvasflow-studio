@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useState } from "react";
 import {
   Upload,
   Plus,
@@ -7,9 +8,13 @@ import {
   Copy,
   Film,
   Trash2,
+  CopyPlus,
+  ArrowRightLeft,
+  Ungroup,
   type LucideIcon,
 } from "lucide-react";
 import { useCanvas, type NodeKind } from "@/store/canvasStore";
+import { ConfirmDialog } from "@/components/storyboard/ConfirmDialog";
 
 const MEDIA_KINDS: NodeKind[] = ["image", "generateImage", "generateVideo"];
 
@@ -37,7 +42,9 @@ type ItemSpec =
 export function ContextMenu() {
   const menu = useCanvas((s) => s.contextMenu);
   const close = useCanvas((s) => s.setContextMenu);
+  const removeNode = useCanvas((s) => s.removeNode);
   const ref = useRef<HTMLDivElement>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!menu) return;
@@ -59,41 +66,56 @@ export function ContextMenu() {
     };
   }, [menu, close]);
 
-  const items = useMenuItems();
+  const items = useMenuItems(setConfirmDeleteId);
 
-  if (!menu) return null;
+  if (!menu && !confirmDeleteId) return null;
 
   // Edge-flip: keep menu inside viewport
   const MENU_W = 240;
   const MENU_H_EST = items.filter((i) => i.kind === "item").length * 44 + 32;
   const vw = typeof window !== "undefined" ? window.innerWidth : 1920;
   const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
-  const left = Math.min(menu.x, vw - MENU_W - 8);
-  const top = Math.min(menu.y, vh - MENU_H_EST - 8);
+  const left = menu ? Math.min(menu.x, vw - MENU_W - 8) : 0;
+  const top = menu ? Math.min(menu.y, vh - MENU_H_EST - 8) : 0;
 
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 rounded-2xl fade-in"
-      style={{
-        left,
-        top,
-        width: MENU_W,
-        padding: 8,
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0 18px 40px rgba(15,23,42,0.12)",
-      }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {items.map((it) =>
-        it.kind === "divider" ? (
-          <div key={it.key} className="my-1" style={{ height: 1, background: "#F1F5F9" }} />
-        ) : (
-          <MenuRow key={it.key} item={it} />
-        ),
+    <>
+      {menu && (
+        <div
+          ref={ref}
+          className="fixed z-50 rounded-2xl fade-in"
+          style={{
+            left,
+            top,
+            width: MENU_W,
+            padding: 8,
+            background: "#FFFFFF",
+            border: "1px solid #E5E7EB",
+            boxShadow: "0 18px 40px rgba(15,23,42,0.12)",
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {items.map((it) =>
+            it.kind === "divider" ? (
+              <div key={it.key} className="my-1" style={{ height: 1, background: "#F1F5F9" }} />
+            ) : (
+              <MenuRow key={it.key} item={it} />
+            ),
+          )}
+        </div>
       )}
-    </div>
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="删除分镜组"
+        message="确认删除该分镜组？此操作可撤销。"
+        confirmLabel="删除"
+        onConfirm={() => {
+          if (confirmDeleteId) removeNode(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
+    </>
   );
 }
 
@@ -166,13 +188,16 @@ function MenuRow({ item }: { item: Extract<ItemSpec, { kind: "item" }> }) {
 }
 
 /** Build the menu items based on context. */
-function useMenuItems(): ItemSpec[] {
+function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
   const menu = useCanvas((s) => s.contextMenu);
   const nodes = useCanvas((s) => s.nodes);
   const past = useCanvas((s) => s.past);
   const undo = useCanvas((s) => s.undo);
   const removeNode = useCanvas((s) => s.removeNode);
   const addToComposition = useCanvas((s) => s.addToComposition);
+  const duplicateStoryboard = useCanvas((s) => s.duplicateStoryboard);
+  const convertGroupToStoryboard = useCanvas((s) => s.convertGroupToStoryboard);
+  const ungroupGroup = useCanvas((s) => s.ungroupGroup);
   const setContextMenu = useCanvas((s) => s.setContextMenu);
 
   return useMemo<ItemSpec[]>(() => {
@@ -180,11 +205,113 @@ function useMenuItems(): ItemSpec[] {
 
     const target = menu.targetNodeId ? nodes.find((n) => n.id === menu.targetNodeId) ?? null : null;
     const isMedia = target ? MEDIA_KINDS.includes(target.kind) : false;
+    const isStoryboard = target?.kind === "storyboard";
+    const isGroup = target?.kind === "nodeGroup";
     const hasComposition = nodes.some((n) => n.kind === "composition");
     const canUndo = past.length > 0;
     const close = () => setContextMenu(null);
 
     const items: ItemSpec[] = [];
+
+    // ── Storyboard-specific menu ──
+    if (isStoryboard && target) {
+      items.push({
+        kind: "item",
+        key: "sb-duplicate",
+        icon: CopyPlus,
+        label: "创建分镜组副本",
+        onClick: () => {
+          duplicateStoryboard(target.id);
+          close();
+        },
+      });
+      items.push({ kind: "divider", key: "sd0" });
+      items.push({
+        kind: "item",
+        key: "sb-copy",
+        icon: Copy,
+        label: "复制分镜组",
+        shortcut: "⌘C",
+        onClick: () => {
+          // TODO: hook up copy/clipboard
+          close();
+        },
+      });
+      items.push({
+        kind: "item",
+        key: "sb-paste",
+        icon: Clipboard,
+        label: "粘贴分镜组",
+        shortcut: "⌘V",
+        disabled: true,
+        onClick: () => close(),
+      });
+      items.push({ kind: "divider", key: "sd1" });
+      items.push({
+        kind: "item",
+        key: "sb-delete",
+        icon: Trash2,
+        label: "删除分镜组",
+        shortcut: "⌘⌫",
+        variant: "destructive",
+        onClick: () => {
+          close();
+          onConfirmDelete(target.id);
+        },
+      });
+      return items;
+    }
+
+    // ── Group-specific menu ──
+    if (isGroup && target) {
+      items.push({
+        kind: "item",
+        key: "grp-to-sb",
+        icon: ArrowRightLeft,
+        label: "转分镜组",
+        onClick: () => {
+          convertGroupToStoryboard(target.id);
+          close();
+        },
+      });
+      items.push({
+        kind: "item",
+        key: "grp-ungroup",
+        icon: Ungroup,
+        label: "解组",
+        onClick: () => {
+          ungroupGroup(target.id);
+          close();
+        },
+      });
+      items.push({ kind: "divider", key: "gd0" });
+      items.push({
+        kind: "item",
+        key: "grp-copy",
+        icon: Copy,
+        label: "复制组",
+        shortcut: "⌘C",
+        onClick: () => {
+          close();
+        },
+      });
+      items.push({ kind: "divider", key: "gd1" });
+      items.push({
+        kind: "item",
+        key: "grp-delete",
+        icon: Trash2,
+        label: "删除组",
+        shortcut: "⌘⌫",
+        variant: "destructive",
+        onClick: () => {
+          removeNode(target.id);
+          close();
+        },
+      });
+      return items;
+    }
+
+    // ── Default menu (existing behavior) ──
 
     // 1. Primary CTA (media nodes only)
     if (isMedia && target) {
@@ -283,5 +410,5 @@ function useMenuItems(): ItemSpec[] {
     }
 
     return items;
-  }, [menu, nodes, past, undo, removeNode, addToComposition, setContextMenu]);
+  }, [menu, nodes, past, undo, removeNode, addToComposition, duplicateStoryboard, convertGroupToStoryboard, ungroupGroup, setContextMenu, onConfirmDelete]);
 }

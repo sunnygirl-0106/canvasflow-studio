@@ -136,6 +136,12 @@
 }
 
 .react-flow__node { padding: 0; border-radius: 14px; overflow: visible !important; }
+.react-flow__node-nodeGroup.selectable.selected,
+.react-flow__node-nodeGroup.selectable:focus,
+.react-flow__node-nodeGroup.selectable:focus-visible,
+.react-flow__node-nodeGroup.selectable:hover {
+  box-shadow: none !important;
+}
 .react-flow__handle {
   background: var(--color-accent);
   border: none;

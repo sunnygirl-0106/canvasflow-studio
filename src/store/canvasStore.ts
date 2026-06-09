@@ -1,9 +1,17 @@
 import { create } from "zustand";
 import { initialNodes, initialEdges } from "@/data/mockData";
+import { autoGrid, fillCells, reflow, stitchToDataURL } from "@/lib/storyboard";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type NodeKind = "image" | "generateImage" | "generateVideo" | "composition" | "audio";
+export type NodeKind =
+  | "image"
+  | "generateImage"
+  | "generateVideo"
+  | "composition"
+  | "audio"
+  | "nodeGroup"
+  | "storyboard";
 export type ShotStatus = "empty" | "ready" | "generating" | "failed";
 export type TrackKind = "video" | "audio";
 
@@ -37,6 +45,36 @@ export interface Track {
 
 export const MAX_VIDEO_TRACKS = 2;
 
+// ── Storyboard types ────────────────────────────────────────────────────────
+
+export type AspectRatio = "21:9" | "16:9" | "9:16" | "3:4" | "4:3" | "1:1";
+
+export interface StoryboardCell {
+  id: string;
+  row: number;
+  col: number;
+  src?: string;
+  sourceNodeId?: string;
+  name?: string;
+}
+
+export interface StoryboardData {
+  rows: number;
+  cols: number;
+  ratio: AspectRatio;
+  showIndex: boolean;
+  cells: StoryboardCell[];
+}
+
+export const STORYBOARD_RATIOS: AspectRatio[] = ["21:9", "16:9", "9:16", "3:4", "4:3", "1:1"];
+export const STORYBOARD_PRESETS = [2, 3, 4, 5];
+export const STORYBOARD_MAX = 10;
+export const STORYBOARD_CELL_PX = 220;
+export const STORYBOARD_GAP_PX = 8;
+export const DEFAULT_RATIO: AspectRatio = "16:9";
+
+// ── Canvas node ─────────────────────────────────────────────────────────────
+
 export interface CanvasNode {
   id: string;
   kind: NodeKind;
@@ -52,6 +90,14 @@ export interface CanvasNode {
     waveform?: string;
     /** @deprecated use tracks */
     shots?: Clip[];
+    storyboard?: StoryboardData;
+    memberIds?: string[];
+    members?: { id: string; kind: NodeKind; src?: string; name?: string }[];
+    groupColor?: string;
+    groupLayout?: "grid" | "horizontal" | "vertical";
+    groupWidth?: number;
+    groupHeight?: number;
+    executing?: boolean;
   };
 }
 
@@ -163,7 +209,7 @@ interface State {
   updateNode: (id: string, patch: Partial<CanvasNode> | ((n: CanvasNode) => CanvasNode)) => void;
   addNode: (kind: NodeKind) => void;
   removeNode: (id: string) => void;
-  addEdge: (from: string, to: string) => void;
+  addEdge: (from: string, to: string, sourceHandle?: string, toHandle?: string) => void;
   removeEdge: (id: string) => void;
   select: (id: string | null) => void;
   /** @deprecated */
@@ -186,6 +232,26 @@ interface State {
   mergeToComposition: (nodeIds: string[]) => string | null;
   addToComposition: (nodeId: string) => string | null;
   setContextMenu: (m: ContextMenuState | null) => void;
+
+  // group actions
+  createGroup: (nodeIds: string[]) => string | null;
+  ungroupGroup: (id: string) => void;
+  setGroupColor: (id: string, color: string) => void;
+  setGroupLayout: (id: string, layout: "grid" | "horizontal" | "vertical") => void;
+  convertGroupToStoryboard: (id: string) => string | null;
+  executeGroup: (id: string) => void;
+
+  // storyboard actions
+  mergeToStoryboard: (nodeIds: string[]) => string | null;
+  setStoryboardRatio: (id: string, ratio: AspectRatio) => void;
+  setStoryboardGrid: (id: string, rows: number, cols: number) => void;
+  toggleStoryboardIndex: (id: string) => void;
+  stitchStoryboard: (id: string, resolution: "2K" | "4K") => Promise<string | null>;
+  clearStoryboard: (id: string) => void;
+  convertStoryboardToGroup: (id: string) => string | null;
+  ungroupStoryboard: (id: string) => void;
+  reorderStoryboardCells: (id: string, fromIdx: number, toIdx: number) => void;
+  duplicateStoryboard: (id: string) => string | null;
 
   // editor actions
   openComposition: (id: string) => void;
@@ -352,11 +418,14 @@ export const useCanvas = create<State>((set, get) => ({
     }));
   },
 
-  addEdge: (from, to) => {
+  addEdge: (from, to, sourceHandle?, toHandle?) => {
     const exists = get().edges.some((e) => e.from === from && e.to === to);
     if (exists) return;
     get().pushHistory();
-    set((s) => ({ edges: [...s.edges, { id: `e-${Date.now()}`, from, to }] }));
+    const edge: Edge = { id: `e-${Date.now()}`, from, to };
+    if (sourceHandle) edge.sourceHandle = sourceHandle;
+    if (toHandle) edge.toHandle = toHandle;
+    set((s) => ({ edges: [...s.edges, edge] }));
     // Audio node → composition: add audio clip
     const { nodes } = get();
     const fromNode = nodes.find((n) => n.id === from);
@@ -726,6 +795,477 @@ export const useCanvas = create<State>((set, get) => ({
   },
 
   setContextMenu: (m) => set({ contextMenu: m }),
+
+  // ── Group actions ────────────────────────────────────────────────────────────
+
+  createGroup: (nodeIds) => {
+    const { nodes } = get();
+    const mediaKinds: NodeKind[] = ["image", "generateImage", "generateVideo"];
+    const picked = nodes.filter(
+      (n) => nodeIds.includes(n.id) && mediaKinds.includes(n.kind),
+    );
+    if (picked.length < 2) return null;
+
+    get().pushHistory();
+    const ts = Date.now();
+    const groupId = `group-${ts}`;
+
+    // Estimate member node sizes (ImageNode = 240×160)
+    const NODE_W = 240;
+    const NODE_H = 160;
+    const PAD = 24;
+    const minX = Math.min(...picked.map((n) => n.x));
+    const minY = Math.min(...picked.map((n) => n.y));
+    const maxX = Math.max(...picked.map((n) => n.x + NODE_W));
+    const maxY = Math.max(...picked.map((n) => n.y + NODE_H));
+
+    const groupNode: CanvasNode = {
+      id: groupId,
+      kind: "nodeGroup",
+      x: minX - PAD,
+      y: minY - PAD,
+      data: {
+        name: `普通组 ${nodes.filter((n) => n.kind === "nodeGroup").length + 1}`,
+        memberIds: picked.map((n) => n.id),
+        members: picked.map((n) => ({ id: n.id, kind: n.kind, src: n.data.src, name: n.data.name })),
+        groupColor: "#56C7CF",
+        groupLayout: "grid",
+        groupWidth: maxX - minX + PAD * 2,
+        groupHeight: maxY - minY + PAD * 2,
+      },
+    };
+
+    set((s) => ({
+      // Put group node first so it renders behind members
+      nodes: [groupNode, ...s.nodes],
+      selectedId: groupId,
+      panelOpen: false,
+    }));
+    return groupId;
+  },
+
+  ungroupGroup: (id) => {
+    const { nodes } = get();
+    const groupNode = nodes.find((n) => n.id === id);
+    if (!groupNode || groupNode.kind !== "nodeGroup") return;
+
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.filter((n) => n.id !== id),
+      edges: s.edges.filter((e) => e.from !== id && e.to !== id),
+      selectedId: null,
+    }));
+  },
+
+  setGroupColor: (id, color) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id ? { ...n, data: { ...n.data, groupColor: color } } : n,
+      ),
+    }));
+  },
+
+  setGroupLayout: (id, layout) => {
+    const { nodes } = get();
+    const groupNode = nodes.find((n) => n.id === id);
+    if (!groupNode || groupNode.kind !== "nodeGroup") return;
+
+    get().pushHistory();
+    const memberIds = groupNode.data.memberIds ?? [];
+    const NODE_W = 240;
+    const NODE_H = 160;
+    const GAP_X = 20;
+    const GAP_Y = 20;
+    const PAD = 24;
+    const baseX = groupNode.x + PAD;
+    const baseY = groupNode.y + PAD;
+
+    const cols =
+      layout === "horizontal" ? memberIds.length
+        : layout === "vertical" ? 1
+        : Math.ceil(Math.sqrt(memberIds.length));
+    const rows = Math.ceil(memberIds.length / cols);
+
+    const posMap = new Map<string, { x: number; y: number }>();
+    memberIds.forEach((mid, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      posMap.set(mid, {
+        x: baseX + col * (NODE_W + GAP_X),
+        y: baseY + row * (NODE_H + GAP_Y),
+      });
+    });
+
+    const frameW = cols * NODE_W + (cols - 1) * GAP_X + PAD * 2;
+    const frameH = rows * NODE_H + (rows - 1) * GAP_Y + PAD * 2;
+
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id === id) {
+          return { ...n, data: { ...n.data, groupLayout: layout, groupWidth: frameW, groupHeight: frameH } };
+        }
+        const pos = posMap.get(n.id);
+        if (pos) return { ...n, x: pos.x, y: pos.y };
+        return n;
+      }),
+    }));
+  },
+
+  convertGroupToStoryboard: (id) => {
+    const { nodes } = get();
+    const groupNode = nodes.find((n) => n.id === id);
+    if (!groupNode || groupNode.kind !== "nodeGroup") return null;
+
+    get().pushHistory();
+    const memberIds = new Set((groupNode.data.memberIds ?? []) as string[]);
+    // Grab live data from canvas nodes (they're still on canvas for group)
+    const liveMembers = nodes.filter((n) => memberIds.has(n.id));
+    const ts = Date.now();
+    const sbId = `storyboard-${ts}`;
+    const { rows, cols } = autoGrid(liveMembers.length);
+    const cells = fillCells(
+      liveMembers.map((n) => ({ src: n.data.src ?? "", sourceNodeId: n.id, name: n.data.name })),
+      rows,
+      cols,
+    );
+
+    const sbNode: CanvasNode = {
+      id: sbId,
+      kind: "storyboard",
+      x: groupNode.x,
+      y: groupNode.y,
+      data: {
+        name: groupNode.data.name ?? "分镜组",
+        storyboard: { rows, cols, ratio: DEFAULT_RATIO, showIndex: false, cells },
+      },
+    };
+
+    // Remove both the group frame and the member nodes (storyboard absorbs them)
+    set((s) => ({
+      nodes: [
+        ...s.nodes.filter((n) => n.id !== id && !memberIds.has(n.id)),
+        sbNode,
+      ],
+      edges: s.edges.filter(
+        (e) => e.from !== id && e.to !== id && !memberIds.has(e.from) && !memberIds.has(e.to),
+      ),
+      selectedId: sbId,
+    }));
+    return sbId;
+  },
+
+  executeGroup: (id) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id ? { ...n, data: { ...n.data, executing: true } } : n,
+      ),
+    }));
+    setTimeout(() => {
+      set((s) => ({
+        nodes: s.nodes.map((n) =>
+          n.id === id ? { ...n, data: { ...n.data, executing: false } } : n,
+        ),
+      }));
+    }, 2000);
+  },
+
+  // ── Storyboard actions ──────────────────────────────────────────────────────
+
+  mergeToStoryboard: (nodeIds) => {
+    const { nodes } = get();
+    const mediaKinds: NodeKind[] = ["image", "generateImage", "generateVideo"];
+    const picked = nodes
+      .filter((n) => nodeIds.includes(n.id) && mediaKinds.includes(n.kind))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+    if (picked.length < 2) return null;
+
+    get().pushHistory();
+
+    const ts = Date.now();
+    const sbId = `storyboard-${ts}`;
+    const { rows, cols } = autoGrid(picked.length);
+    const cells = fillCells(
+      picked.map((n) => ({ src: n.data.src ?? "", sourceNodeId: n.id, name: n.data.name })),
+      rows,
+      cols,
+    );
+
+    const maxX = Math.max(...picked.map((n) => n.x));
+    const minY = Math.min(...picked.map((n) => n.y));
+    const maxY = Math.max(...picked.map((n) => n.y));
+    const pickedIds = new Set(picked.map((n) => n.id));
+
+    const sbNode: CanvasNode = {
+      id: sbId,
+      kind: "storyboard",
+      x: maxX + 400,
+      y: (minY + maxY) / 2,
+      data: {
+        name: `分镜组 ${nodes.filter((n) => n.kind === "storyboard").length + 1}`,
+        storyboard: { rows, cols, ratio: DEFAULT_RATIO, showIndex: false, cells },
+      },
+    };
+
+    set((s) => ({
+      nodes: [...s.nodes.filter((n) => !pickedIds.has(n.id)), sbNode],
+      edges: s.edges.filter((e) => !pickedIds.has(e.from) && !pickedIds.has(e.to)),
+      selectedId: sbId,
+      panelOpen: false,
+    }));
+    return sbId;
+  },
+
+  setStoryboardRatio: (id, ratio) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id && n.data.storyboard
+          ? { ...n, data: { ...n.data, storyboard: { ...n.data.storyboard, ratio } } }
+          : n,
+      ),
+    }));
+  },
+
+  setStoryboardGrid: (id, rows, cols) => {
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    rows = clamp(rows, 1, STORYBOARD_MAX);
+    cols = clamp(cols, 1, STORYBOARD_MAX);
+    get().pushHistory();
+    const { nodes } = get();
+    const sbNode = nodes.find((n) => n.id === id);
+    const sb = sbNode?.data.storyboard;
+    if (!sbNode || !sb) return;
+
+    const { cells: newCells, overflow } = reflow(sb, rows, cols);
+
+    // Create overflow nodes to the right of the storyboard
+    const overflowNodes: CanvasNode[] = overflow.map((o, i) => ({
+      id: `image-overflow-${Date.now()}-${i}`,
+      kind: "image" as NodeKind,
+      x: sbNode.x + 400 + i * 260,
+      y: sbNode.y,
+      data: { src: o.src, name: o.name ?? "溢出图片" },
+    }));
+
+    set((s) => ({
+      nodes: [
+        ...s.nodes.map((n) =>
+          n.id === id && n.data.storyboard
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  storyboard: { ...n.data.storyboard, rows, cols, cells: newCells },
+                },
+              }
+            : n,
+        ),
+        ...overflowNodes,
+      ],
+    }));
+  },
+
+  toggleStoryboardIndex: (id) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id && n.data.storyboard
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                storyboard: { ...n.data.storyboard, showIndex: !n.data.storyboard.showIndex },
+              },
+            }
+          : n,
+      ),
+    }));
+  },
+
+  clearStoryboard: (id) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== id || !n.data.storyboard) return n;
+        const sb = n.data.storyboard;
+        const clearedCells = sb.cells.map((c) => ({
+          ...c,
+          src: undefined,
+          sourceNodeId: undefined,
+          name: undefined,
+        }));
+        return { ...n, data: { ...n.data, storyboard: { ...sb, cells: clearedCells } } };
+      }),
+      // Remove edges connected to cleared source nodes
+      edges: (() => {
+        const sbNode = s.nodes.find((n) => n.id === id);
+        const sourceIds = new Set(
+          (sbNode?.data.storyboard?.cells ?? [])
+            .map((c) => c.sourceNodeId)
+            .filter(Boolean) as string[],
+        );
+        return s.edges.filter((e) => !sourceIds.has(e.from) && !sourceIds.has(e.to));
+      })(),
+    }));
+  },
+
+  convertStoryboardToGroup: (id) => {
+    const { nodes } = get();
+    const sbNode = nodes.find((n) => n.id === id);
+    const sb = sbNode?.data.storyboard;
+    if (!sbNode || !sb) return null;
+
+    get().pushHistory();
+    const ts = Date.now();
+    const NODE_W = 240;
+    const NODE_H = 160;
+    const PAD = 24;
+    const filled = sb.cells.filter((c) => c.src);
+    const cols = sb.cols;
+    const newImageNodes: CanvasNode[] = filled.map((c, i) => ({
+      id: c.sourceNodeId ?? `image-${ts}-${i}`,
+      kind: "image" as NodeKind,
+      x: sbNode.x + PAD + (i % cols) * 260,
+      y: sbNode.y + PAD + Math.floor(i / cols) * 180,
+      data: { src: c.src, name: c.name },
+    }));
+
+    const imgCols = Math.min(filled.length, cols);
+    const imgRows = Math.ceil(filled.length / cols);
+    const groupId = `group-${ts}`;
+    const groupNode: CanvasNode = {
+      id: groupId,
+      kind: "nodeGroup",
+      x: sbNode.x,
+      y: sbNode.y,
+      data: {
+        name: sbNode.data.name ?? "普通组",
+        memberIds: newImageNodes.map((n) => n.id),
+        members: newImageNodes.map((n) => ({ id: n.id, kind: n.kind, src: n.data.src, name: n.data.name })),
+        groupColor: "#56C7CF",
+        groupWidth: imgCols * 260 - 20 + PAD * 2,
+        groupHeight: imgRows * 180 - 20 + PAD * 2,
+      },
+    };
+
+    set((s) => ({
+      nodes: [groupNode, ...s.nodes.filter((n) => n.id !== id), ...newImageNodes],
+      edges: s.edges.filter((e) => e.from !== id && e.to !== id),
+      selectedId: groupId,
+    }));
+    return groupId;
+  },
+
+  ungroupStoryboard: (id) => {
+    const { nodes } = get();
+    const sbNode = nodes.find((n) => n.id === id);
+    const sb = sbNode?.data.storyboard;
+    if (!sbNode || !sb) return;
+
+    get().pushHistory();
+    const ts = Date.now();
+    const filled = sb.cells.filter((c) => c.src);
+    const newImageNodes: CanvasNode[] = filled.map((c, i) => ({
+      id: c.sourceNodeId ?? `image-${ts}-${i}`,
+      kind: "image" as NodeKind,
+      x: sbNode.x + (i % sb.cols) * 260,
+      y: sbNode.y + Math.floor(i / sb.cols) * 180,
+      data: { src: c.src, name: c.name },
+    }));
+
+    set((s) => ({
+      nodes: [...s.nodes.filter((n) => n.id !== id), ...newImageNodes],
+      edges: s.edges.filter((e) => e.from !== id && e.to !== id),
+      selectedId: null,
+    }));
+  },
+
+  reorderStoryboardCells: (id, fromIdx, toIdx) => {
+    get().pushHistory();
+    set((s) => ({
+      nodes: s.nodes.map((n) => {
+        if (n.id !== id || !n.data.storyboard) return n;
+        const sb = n.data.storyboard;
+        const cells = [...sb.cells];
+        const [moved] = cells.splice(fromIdx, 1);
+        cells.splice(toIdx, 0, moved);
+        // Re-assign row/col based on new position
+        const updated = cells.map((c, i) => ({
+          ...c,
+          row: Math.floor(i / sb.cols) + 1,
+          col: (i % sb.cols) + 1,
+        }));
+        return { ...n, data: { ...n.data, storyboard: { ...sb, cells: updated } } };
+      }),
+    }));
+  },
+
+  duplicateStoryboard: (id) => {
+    const { nodes, edges } = get();
+    const sbNode = nodes.find((n) => n.id === id);
+    if (!sbNode || !sbNode.data.storyboard) return null;
+
+    get().pushHistory();
+    const ts = Date.now();
+    const newId = `storyboard-dup-${ts}`;
+    const sb = sbNode.data.storyboard;
+    const newCells = sb.cells.map((c, i) => ({ ...c, id: `cell-dup-${ts}-${i}` }));
+    const dupNode: CanvasNode = {
+      ...sbNode,
+      id: newId,
+      x: sbNode.x + 60,
+      y: sbNode.y + 60,
+      data: {
+        ...sbNode.data,
+        name: `${sbNode.data.name ?? "分镜组"} 副本`,
+        storyboard: { ...sb, cells: newCells },
+      },
+    };
+
+    // Copy edges: internal + external
+    const newEdges: Edge[] = edges
+      .filter((e) => e.from === id || e.to === id)
+      .map((e, i) => ({
+        ...e,
+        id: `e-dup-${ts}-${i}`,
+        from: e.from === id ? newId : e.from,
+        to: e.to === id ? newId : e.to,
+      }));
+
+    set((s) => ({
+      nodes: [...s.nodes, dupNode],
+      edges: [...s.edges, ...newEdges],
+      selectedId: newId,
+    }));
+    return newId;
+  },
+
+  stitchStoryboard: async (id, resolution) => {
+    const { nodes } = get();
+    const sbNode = nodes.find((n) => n.id === id);
+    const sb = sbNode?.data.storyboard;
+    if (!sbNode || !sb) return null;
+
+    const dataURL = await stitchToDataURL(sb, resolution);
+
+    get().pushHistory();
+    const ts = Date.now();
+    const imgId = `image-stitch-${ts}`;
+    const imgNode: CanvasNode = {
+      id: imgId,
+      kind: "image",
+      x: sbNode.x,
+      y: sbNode.y + 400,
+      data: { src: dataURL, name: `分镜拼接图 (${resolution})` },
+    };
+
+    set((s) => ({
+      nodes: [...s.nodes, imgNode],
+      selectedId: imgId,
+    }));
+    return imgId;
+  },
 
   // ── Editor actions ────────────────────────────────────────────────────────────
 
