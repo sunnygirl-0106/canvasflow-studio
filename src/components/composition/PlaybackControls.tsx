@@ -1,5 +1,5 @@
 import { Play, Pause, Scan } from "lucide-react";
-import { fmtSec } from "./TrackTimeline";
+import { fmtSec } from "@/lib/time";
 
 interface Props {
   currentTime: number;

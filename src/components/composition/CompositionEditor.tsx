@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useCanvas } from "@/store/canvasStore";
+import { useCanvas, compDuration } from "@/store/canvasStore";
 import { EditorTopBar } from "./EditorTopBar";
 import { PreviewStage } from "./PreviewStage";
 import { TrackTimeline } from "./TrackTimeline";
@@ -26,22 +26,43 @@ export function CompositionEditor() {
   const [muted, setMuted] = useState(false);
 
   const comp = nodes.find((n) => n.id === editorCompId);
-  const shots = comp?.data.shots ?? [];
-  const totalDuration = shots.reduce((sum, s) => sum + s.duration, 0);
+  const tracks = comp?.data.tracks ?? [];
+  // Step 2: render only the main video track (V1); multi-track wiring comes later.
+  const v1 = tracks.find((t) => t.kind === "video");
+  const shots = v1?.clips ?? [];
+  const totalDuration = compDuration(tracks);
 
-  // Playback
+  // rAF-based playback — no timing drift
   useEffect(() => {
     if (!playing) return;
-    const iv = setInterval(() => {
+    let stopped = false;
+    let lastTs: number | null = null;
+
+    const tick = (ts: number) => {
+      if (stopped) return;
+      if (lastTs === null) lastTs = ts;
+      // Cap delta to 100ms to avoid huge jumps on tab re-focus
+      const delta = Math.min((ts - lastTs) / 1000, 0.1);
+      lastTs = ts;
+
       setCurrentTime((t) => {
-        if (t >= totalDuration) {
+        const next = t + delta;
+        if (next >= totalDuration) {
           setPlaying(false);
+          stopped = true;
           return 0;
         }
-        return t + 0.1;
+        return next;
       });
-    }, 100);
-    return () => clearInterval(iv);
+
+      if (!stopped) requestAnimationFrame(tick);
+    };
+
+    const id = requestAnimationFrame(tick);
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(id);
+    };
   }, [playing, totalDuration]);
 
   // Reset when opening a different composition
@@ -76,7 +97,7 @@ export function CompositionEditor() {
   if (fullscreenOpen) {
     return createPortal(
       <FullscreenPlayer
-        shots={shots}
+        tracks={tracks}
         currentTime={currentTime}
         totalDuration={totalDuration}
         playing={playing}
@@ -98,7 +119,6 @@ export function CompositionEditor() {
         pointerEvents: isFull ? "auto" : "none",
       }}
     >
-      {/* Full mode: top bar + preview */}
       {isFull && (
         <>
           <EditorTopBar
@@ -107,7 +127,7 @@ export function CompositionEditor() {
             totalDuration={totalDuration}
           />
           <PreviewStage
-            shots={shots}
+            tracks={tracks}
             currentTime={currentTime}
             playing={playing}
             onTogglePlay={handleTogglePlay}
@@ -130,7 +150,7 @@ export function CompositionEditor() {
           boxShadow: isFull ? "none" : "0 -8px 24px rgba(0,0,0,0.3)",
         }}
       >
-        {/* Toolbar row: left(editor tools) / center(playback) / right(zoom) */}
+        {/* Toolbar row */}
         <div className="flex items-center justify-between" style={{ background: "#1E293B" }}>
           <div className="relative flex-shrink-0">
             <EditorToolbar
@@ -168,7 +188,7 @@ export function CompositionEditor() {
         {/* Track */}
         <TrackTimeline
           compId={editorCompId}
-          shots={shots}
+          tracks={tracks}
           currentTime={currentTime}
           pxPerSec={pxPerSec}
           selectedClipId={selectedClipId}

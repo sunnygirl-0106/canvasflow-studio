@@ -1,12 +1,5 @@
 import { useEffect, useRef } from "react";
-import {
-  FileText,
-  Image as ImageIcon,
-  PlayCircle,
-  Music2,
-  Upload,
-  Scissors,
-} from "lucide-react";
+import { FileText, Image as ImageIcon, PlayCircle, Music2, Upload, Scissors } from "lucide-react";
 import { useCanvas, type NodeKind } from "@/store/canvasStore";
 
 interface AddNodePanelProps {
@@ -14,7 +7,7 @@ interface AddNodePanelProps {
   onClose: () => void;
 }
 
-type PanelKind = NodeKind | "text" | "audio";
+type PanelKind = NodeKind | "text";
 
 interface PanelItem {
   key: PanelKind;
@@ -29,7 +22,13 @@ const NODE_ITEMS: PanelItem[] = [
   { key: "text", title: "文本", subtitle: "脚本、广告词、品牌文案", icon: FileText },
   { key: "generateImage", title: "图片", subtitle: "海报、分镜、角色设计", icon: ImageIcon },
   { key: "generateVideo", title: "视频", subtitle: "视频、动画、电影", icon: PlayCircle },
-  { key: "composition", title: "视频合成", subtitle: "多个视频片段合为一个", icon: Scissors, isNew: true },
+  {
+    key: "composition",
+    title: "视频合成",
+    subtitle: "多个视频片段合为一个",
+    icon: Scissors,
+    isNew: true,
+  },
   { key: "audio", title: "音频", subtitle: "音乐、配音、音效", icon: Music2 },
 ];
 
@@ -67,13 +66,12 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
   if (!open) return null;
 
   const handleSelect = (kind: PanelKind) => {
-    // Only kinds known to the store are forwarded. text/audio are placeholders for future support.
-    if (kind === "text" || kind === "audio") {
-      // TODO: hook up when text/audio node kinds exist
+    // text is a placeholder for future support.
+    if (kind === "text") {
       onClose();
       return;
     }
-    addNode(kind);
+    addNode(kind as NodeKind);
     onClose();
   };
 
@@ -104,7 +102,6 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
           <PanelCard key={item.key} item={item} onClick={() => handleSelect(item.key)} />
         ))}
       </div>
-
     </div>
   );
 }
@@ -120,13 +117,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function PanelCard({
-  item,
-  onClick,
-}: {
-  item: PanelItem;
-  onClick: () => void;
-}) {
+function PanelCard({ item, onClick }: { item: PanelItem; onClick: () => void }) {
   const { icon: Icon, title, subtitle, isNew } = item;
   return (
     <button

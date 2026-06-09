@@ -12,7 +12,8 @@ const COLORS = {
 
 export function CompositionNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
   const openComposition = useCanvas((s) => s.openComposition);
-  const shots = data.shots ?? [];
+  // Step 2: summarize from the main video track (V1); richer track summary comes later.
+  const shots = (data.tracks ?? []).find((t) => t.kind === "video")?.clips ?? [];
   const thumbnail = shots[0]?.thumbnail;
 
   return (
@@ -35,7 +36,11 @@ export function CompositionNode({ id, data }: { id: string; data: CanvasNode["da
 
       {/* Header */}
       <div className="flex items-center gap-2" style={{ padding: "14px 16px 10px" }}>
-        <Scissors className="w-[16px] h-[16px] flex-shrink-0" style={{ color: COLORS.headerText }} strokeWidth={1.8} />
+        <Scissors
+          className="w-[16px] h-[16px] flex-shrink-0"
+          style={{ color: COLORS.headerText }}
+          strokeWidth={1.8}
+        />
         <span
           className="text-[14px] font-semibold truncate"
           style={{ color: COLORS.headerText, fontFamily: "PingFang SC, Inter, system-ui" }}

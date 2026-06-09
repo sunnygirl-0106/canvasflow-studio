@@ -1,46 +1,35 @@
 import { Play } from "lucide-react";
-import type { Shot } from "@/store/canvasStore";
-
-const CLIP_STYLES: Record<Shot["color"], { border: string }> = {
-  cyan: { border: "#67E8F9" },
-  purple: { border: "#A78BFA" },
-  yellow: { border: "#FDBA74" },
-  rose: { border: "#FDA4AF" },
-  emerald: { border: "#6EE7B7" },
-  gray: { border: "#94A3B8" },
-};
+import { clipAt, type Track } from "@/store/canvasStore";
+import { CLIP_STYLES } from "@/lib/clipStyles";
 
 interface Props {
-  shots: Shot[];
+  tracks: Track[];
   currentTime: number;
   playing: boolean;
   onTogglePlay: () => void;
   onFullscreen?: () => void;
 }
 
-export function PreviewStage({ shots, currentTime, playing, onTogglePlay, onFullscreen }: Props) {
-  // Find which shot is at currentTime
-  let elapsed = 0;
-  let activeShot: Shot | null = null;
-  for (const shot of shots) {
-    if (currentTime < elapsed + shot.duration) {
-      activeShot = shot;
-      break;
-    }
-    elapsed += shot.duration;
-  }
-  if (!activeShot && shots.length > 0) activeShot = shots[shots.length - 1];
+export function PreviewStage({ tracks, currentTime, playing, onTogglePlay }: Props) {
+  const videoTracks = tracks
+    .filter((t) => t.kind === "video")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const v1 = videoTracks.find((t) => t.name === "V1") ?? videoTracks[0];
+  const v2 = videoTracks.find((t) => t !== v1);
 
-  const style = activeShot ? (CLIP_STYLES[activeShot.color] ?? CLIP_STYLES.gray) : CLIP_STYLES.gray;
+  const base = v1 ? clipAt(v1, currentTime) : null; // V1 underlay
+  const pip = v2 ? clipAt(v2, currentTime) : null; // V2 picture-in-picture
+
+  const style = base ? (CLIP_STYLES[base.color] ?? CLIP_STYLES.gray) : CLIP_STYLES.gray;
 
   return (
     <div
       className="relative flex-1 flex items-center justify-center overflow-hidden"
       style={{ background: "#000", minHeight: 300 }}
     >
-      {activeShot?.thumbnail ? (
+      {base?.thumbnail ? (
         <img
-          src={activeShot.thumbnail}
+          src={base.thumbnail}
           alt=""
           className="w-full h-full object-contain"
           draggable={false}
@@ -48,6 +37,28 @@ export function PreviewStage({ shots, currentTime, playing, onTogglePlay, onFull
       ) : (
         <div className="text-[14px] font-medium" style={{ color: "#475569" }}>
           暂无画面
+        </div>
+      )}
+
+      {/* V2 picture-in-picture window (decision #7) */}
+      {pip?.thumbnail && (
+        <div
+          className="absolute overflow-hidden rounded-lg"
+          style={{
+            top: "5%",
+            right: "4%",
+            width: "28%",
+            aspectRatio: "16 / 9",
+            border: "2px solid rgba(255,255,255,0.85)",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.5)",
+          }}
+        >
+          <img
+            src={pip.thumbnail}
+            alt=""
+            className="w-full h-full object-cover"
+            draggable={false}
+          />
         </div>
       )}
 
@@ -64,16 +75,18 @@ export function PreviewStage({ shots, currentTime, playing, onTogglePlay, onFull
         </button>
       )}
 
-      {/* Active shot label */}
-      {activeShot && (
+      {/* Active clip label */}
+      {base && (
         <div className="absolute bottom-3 left-4 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full" style={{ background: style.border }} />
-          <span className="text-[12px] font-medium" style={{ color: "#E2E8F0", fontFamily: "Inter, system-ui" }}>
-            {activeShot.name}
+          <span
+            className="text-[12px] font-medium"
+            style={{ color: "#E2E8F0", fontFamily: "Inter, system-ui" }}
+          >
+            {base.name}
           </span>
         </div>
       )}
-
     </div>
   );
 }

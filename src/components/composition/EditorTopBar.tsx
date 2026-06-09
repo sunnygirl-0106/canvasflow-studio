@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Download, X, ChevronDown, Hash } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
+import { fmtSec } from "@/lib/time";
 
 interface Props {
   compName: string;
@@ -13,12 +14,6 @@ type ExportStep = "closed" | "pick" | "settings";
 
 const RESOLUTIONS = ["720P", "1080P", "4K"] as const;
 const FORMATS = ["MP4", "MOV", "WebM"] as const;
-
-function fmtSec(s: number) {
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-}
 
 export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
   const closeComposition = useCanvas((s) => s.closeComposition);
@@ -54,12 +49,7 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
   return (
     <div
       className="flex items-center justify-between flex-shrink-0"
-      style={{
-        height: 44,
-        padding: "0 20px",
-        background: "#1E293B",
-        borderBottom: "1px solid #334155",
-      }}
+      style={{ height: 44, padding: "0 20px", background: "#1E293B", borderBottom: "1px solid #334155" }}
     >
       {/* Left: title + info */}
       <div className="flex items-center gap-3">
@@ -83,18 +73,12 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
           <button
             onClick={() => setStep(step === "closed" ? "pick" : "closed")}
             className="flex items-center gap-1.5 rounded-lg text-[13px] font-medium transition-colors hover:bg-white/10"
-            style={{
-              height: 34,
-              padding: "0 12px",
-              color: "#F1F5F9",
-              background: "#334155",
-            }}
+            style={{ height: 34, padding: "0 12px", color: "#F1F5F9", background: "#334155" }}
           >
             导出
             <ChevronDown className="w-3 h-3 ml-0.5" style={{ color: "#64748B" }} />
           </button>
 
-          {/* Step 1: Pick export target */}
           {step === "pick" && (
             <div
               className="absolute right-0 top-[calc(100%+8px)] z-50 rounded-2xl"
@@ -106,10 +90,7 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
                 boxShadow: "0 18px 40px rgba(0,0,0,0.4)",
               }}
             >
-              <div
-                className="text-[13px] font-medium mb-4"
-                style={{ color: "#64748B", fontFamily: "PingFang SC, Inter, system-ui" }}
-              >
+              <div className="text-[13px] font-medium mb-4" style={{ color: "#64748B" }}>
                 导出位置
               </div>
               <button
@@ -118,12 +99,7 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
                 style={{ padding: "12px 14px" }}
               >
                 <Download className="w-5 h-5 flex-shrink-0" style={{ color: "#F1F5F9" }} strokeWidth={1.8} />
-                <span
-                  className="text-[15px] font-semibold"
-                  style={{ color: "#F1F5F9", fontFamily: "PingFang SC, Inter, system-ui" }}
-                >
-                  导出到本地
-                </span>
+                <span className="text-[15px] font-semibold" style={{ color: "#F1F5F9" }}>导出到本地</span>
               </button>
               <button
                 onClick={() => handlePick("canvas")}
@@ -131,17 +107,11 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
                 style={{ padding: "12px 14px" }}
               >
                 <Hash className="w-5 h-5 flex-shrink-0" style={{ color: "#F1F5F9" }} strokeWidth={1.8} />
-                <span
-                  className="text-[15px] font-semibold"
-                  style={{ color: "#F1F5F9", fontFamily: "PingFang SC, Inter, system-ui" }}
-                >
-                  导出到画布
-                </span>
+                <span className="text-[15px] font-semibold" style={{ color: "#F1F5F9" }}>导出到画布</span>
               </button>
             </div>
           )}
 
-          {/* Step 2: Export settings */}
           {step === "settings" && (
             <div
               className="absolute right-0 top-[calc(100%+8px)] z-50 rounded-2xl"
@@ -153,14 +123,10 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
                 boxShadow: "0 18px 40px rgba(0,0,0,0.4)",
               }}
             >
-              <div
-                className="text-[13px] font-medium mb-5"
-                style={{ color: "#64748B", fontFamily: "PingFang SC, Inter, system-ui" }}
-              >
+              <div className="text-[13px] font-medium mb-5" style={{ color: "#64748B" }}>
                 导出设置
               </div>
 
-              {/* 导出位置 */}
               <SettingsRow label="导出位置">
                 <SelectBox
                   value={target === "local" ? "导出到本地" : "导出到画布"}
@@ -171,7 +137,6 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
 
               <div className="my-4" style={{ height: 1, background: "#334155" }} />
 
-              {/* 分辨率 */}
               <SettingsRow label="分辨率">
                 <SelectBox
                   value={resolution}
@@ -180,7 +145,6 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
                 />
               </SettingsRow>
 
-              {/* 格式 */}
               <SettingsRow label="格式">
                 <SelectBox
                   value={format}
@@ -189,32 +153,18 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
                 />
               </SettingsRow>
 
-              {/* Buttons */}
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setStep("closed")}
                   className="flex-1 flex items-center justify-center rounded-xl text-[14px] font-semibold transition-colors hover:bg-white/10"
-                  style={{
-                    height: 44,
-                    color: "#F1F5F9",
-                    background: "#334155",
-                    fontFamily: "PingFang SC, Inter, system-ui",
-                  }}
+                  style={{ height: 44, color: "#F1F5F9", background: "#334155" }}
                 >
                   取消
                 </button>
                 <button
-                  onClick={() => {
-                    // TODO: actual export logic
-                    setStep("closed");
-                  }}
+                  onClick={() => setStep("closed")}
                   className="flex-1 flex items-center justify-center rounded-xl text-[14px] font-semibold transition-colors hover:opacity-90"
-                  style={{
-                    height: 44,
-                    color: "#0F172A",
-                    background: "#FFFFFF",
-                    fontFamily: "PingFang SC, Inter, system-ui",
-                  }}
+                  style={{ height: 44, color: "#0F172A", background: "#FFFFFF" }}
                 >
                   确认
                 </button>
@@ -238,10 +188,7 @@ export function EditorTopBar({ compName, shotCount, totalDuration }: Props) {
 function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <span
-        className="text-[14px] font-semibold"
-        style={{ color: "#F1F5F9", fontFamily: "PingFang SC, Inter, system-ui" }}
-      >
+      <span className="text-[14px] font-semibold" style={{ color: "#F1F5F9" }}>
         {label}
       </span>
       {children}
@@ -275,14 +222,7 @@ function SelectBox({
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center justify-between rounded-lg text-[13px] font-medium"
-        style={{
-          width: 200,
-          height: 38,
-          padding: "0 12px",
-          background: "#334155",
-          color: "#F1F5F9",
-          fontFamily: "PingFang SC, Inter, system-ui",
-        }}
+        style={{ width: 200, height: 38, padding: "0 12px", background: "#334155", color: "#F1F5F9" }}
       >
         <span>{value}</span>
         <ChevronDown className="w-3.5 h-3.5" style={{ color: "#64748B" }} />
@@ -290,26 +230,14 @@ function SelectBox({
       {open && (
         <div
           className="absolute right-0 top-[calc(100%+4px)] z-50 rounded-xl overflow-hidden"
-          style={{
-            width: 200,
-            background: "#334155",
-            border: "1px solid #475569",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-          }}
+          style={{ width: 200, background: "#334155", border: "1px solid #475569", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}
         >
           {options.map((opt) => (
             <button
               key={opt}
-              onClick={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
+              onClick={() => { onChange(opt); setOpen(false); }}
               className="w-full text-left text-[13px] font-medium transition-colors hover:bg-white/10"
-              style={{
-                padding: "10px 14px",
-                color: opt === value ? "#FFFFFF" : "#CBD5E1",
-                fontFamily: "PingFang SC, Inter, system-ui",
-              }}
+              style={{ padding: "10px 14px", color: opt === value ? "#FFFFFF" : "#CBD5E1" }}
             >
               {opt}
             </button>

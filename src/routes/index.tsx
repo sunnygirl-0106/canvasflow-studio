@@ -5,7 +5,7 @@ import {
   Background,
   BackgroundVariant,
   ReactFlowProvider,
-  useReactFlow,
+  type NodeProps,
   type Node as RFNode,
   type Edge as RFEdge,
   type Connection,
@@ -14,7 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { useCanvas } from "@/store/canvasStore";
+import { useCanvas, type CanvasNode } from "@/store/canvasStore";
 import { Toolbar } from "@/components/Toolbar";
 import { BottomDock } from "@/components/BottomDock";
 import { PropertiesPanel } from "@/components/PropertiesPanel";
@@ -23,11 +23,13 @@ import { ImageNode } from "@/components/nodes/ImageNode";
 import { GenerateImageNode } from "@/components/nodes/GenerateImageNode";
 import { GenerateVideoNode } from "@/components/nodes/GenerateVideoNode";
 import { CompositionNode } from "@/components/nodes/CompositionNode";
+import { AudioNode } from "@/components/nodes/AudioNode";
 import { LeftRail } from "@/components/LeftRail";
 import { MultiSelectionCTA } from "@/components/MultiSelectionCTA";
 import { CompositionCoachToast } from "@/components/CompositionCoachToast";
 import { ContextMenu } from "@/components/ContextMenu";
 import { CompositionEditor } from "@/components/composition/CompositionEditor";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export const Route = createFileRoute("/")({ component: IndexPage });
 
@@ -44,24 +46,36 @@ function Workspace() {
     <div className="h-screen w-screen flex flex-col bg-background overflow-hidden">
       <Toolbar />
       <div className="flex-1 relative">
-        <Canvas />
+        <ErrorBoundary>
+          <Canvas />
+        </ErrorBoundary>
         <LeftRail />
         <BottomDock />
         <PropertiesPanel />
         <CompositionCoachToast />
         <ContextMenu />
       </div>
-      <CompositionEditor />
+      <ErrorBoundary>
+        <CompositionEditor />
+      </ErrorBoundary>
       <ExportDialog />
     </div>
   );
 }
 
+// Node type components — defined at module level to avoid recreation on each render
 const nodeTypes = {
-  image: ({ id, data }: any) => <ImageNode data={data} />,
-  generateImage: ({ id, data }: any) => <GenerateImageNode id={id} data={data} />,
-  generateVideo: ({ id, data }: any) => <GenerateVideoNode id={id} data={data} />,
-  composition: ({ id, data }: any) => <CompositionNode id={id} data={data} />,
+  image: (props: NodeProps) => <ImageNode data={props.data as CanvasNode["data"]} />,
+  generateImage: (props: NodeProps) => (
+    <GenerateImageNode id={props.id} data={props.data as CanvasNode["data"]} />
+  ),
+  generateVideo: (props: NodeProps) => (
+    <GenerateVideoNode id={props.id} data={props.data as CanvasNode["data"]} />
+  ),
+  composition: (props: NodeProps) => (
+    <CompositionNode id={props.id} data={props.data as CanvasNode["data"]} />
+  ),
+  audio: (props: NodeProps) => <AudioNode data={props.data as CanvasNode["data"]} />,
 };
 
 function Canvas() {
@@ -75,6 +89,17 @@ function Canvas() {
   const undo = useCanvas((s) => s.undo);
   const redo = useCanvas((s) => s.redo);
   const setContextMenu = useCanvas((s) => s.setContextMenu);
+
+  // Build shotId → hostNodeId index once per nodes change — O(n) vs O(n×m) per edge
+  const shotHostMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const n of nodes) {
+      for (const sh of n.data.shots ?? []) {
+        map.set(sh.id, n.id);
+      }
+    }
+    return map;
+  }, [nodes]);
 
   const rfNodes = useMemo<RFNode[]>(
     () =>
@@ -95,13 +120,13 @@ function Canvas() {
         id: e.id,
         source: e.from,
         sourceHandle: e.sourceHandle ?? "out",
-        target: findHostNodeId(nodes, e.to),
-        targetHandle: e.toHandle ?? (isShotId(nodes, e.to) ? e.to : undefined),
+        target: shotHostMap.get(e.to) ?? e.to,
+        targetHandle: shotHostMap.has(e.to) ? e.to : undefined,
         type: "default",
         animated: true,
         style: { stroke: e.color ?? "#56C7CF", strokeWidth: 2 },
       })),
-    [edges, nodes],
+    [edges, shotHostMap],
   );
 
   useEffect(() => {
@@ -116,55 +141,57 @@ function Canvas() {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
-  const onNodesChange = (changes: NodeChange[]) => {
-    for (const c of changes) {
-      if (c.type === "position" && c.position) {
-        updateNode(c.id, { x: c.position.x, y: c.position.y });
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      for (const c of changes) {
+        if (c.type === "position" && c.position) {
+          updateNode(c.id, { x: c.position.x, y: c.position.y });
+        }
+        if (c.type === "select" && c.selected) select(c.id);
       }
-      if (c.type === "select" && c.selected) select(c.id);
-    }
-  };
+    },
+    [updateNode, select],
+  );
 
-  const onEdgesChange = (changes: EdgeChange[]) => {
-    for (const c of changes) {
-      if (c.type === "remove") removeEdgeFn(c.id);
-    }
-  };
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      for (const c of changes) {
+        if (c.type === "remove") removeEdgeFn(c.id);
+      }
+    },
+    [removeEdgeFn],
+  );
 
-  const onConnect = (c: Connection) => {
-    if (!c.source || !c.target) return;
-    // Any connection to a composition node → add as shot
-    const targetNode = nodes.find((n) => n.id === c.target);
-    if (targetNode?.kind === "composition") {
-      addToComposition(c.source);
-      return;
-    }
-    const target = c.targetHandle ?? c.target;
-    addEdgeFn(c.source, target);
-  };
+  const onConnect = useCallback(
+    (c: Connection) => {
+      if (!c.source || !c.target) return;
+      const targetNode = nodes.find((n) => n.id === c.target);
+      if (targetNode?.kind === "composition") {
+        addToComposition(c.source);
+        return;
+      }
+      const target = c.targetHandle ?? c.target;
+      addEdgeFn(c.source, target);
+    },
+    [nodes, addEdgeFn, addToComposition],
+  );
 
-  // Track which node started the connection drag
   const connectingSourceRef = useRef<string | null>(null);
 
-  const onConnectStart = useCallback((_: any, params: { nodeId: string | null }) => {
+  const onConnectStart = useCallback((_: unknown, params: { nodeId: string | null }) => {
     connectingSourceRef.current = params.nodeId;
   }, []);
 
-  // When connection drag ends without hitting a handle,
-  // check if mouse is over a composition node and auto-connect
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
       const sourceId = connectingSourceRef.current;
       connectingSourceRef.current = null;
       if (!sourceId) return;
 
-      // Get the mouse/touch position
       const clientX = "changedTouches" in event ? event.changedTouches[0].clientX : event.clientX;
       const clientY = "changedTouches" in event ? event.changedTouches[0].clientY : event.clientY;
 
-      // Find the element under the cursor
       const elementsUnder = document.elementsFromPoint(clientX, clientY);
-      // Walk up from each element to find a ReactFlow node wrapper with data-id
       for (const el of elementsUnder) {
         const nodeEl = (el as HTMLElement).closest?.(".react-flow__node");
         if (!nodeEl) continue;
@@ -217,18 +244,14 @@ function Canvas() {
         panOnDrag={[1, 2]}
         selectionOnDrag
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(15,23,42,0.10)" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={1}
+          color="rgba(15,23,42,0.10)"
+        />
         <MultiSelectionCTA />
       </ReactFlow>
     </div>
   );
 }
-
-function isShotId(nodes: any[], id: string) {
-  return nodes.some((n) => n.data.shots?.some((s: any) => s.id === id));
-}
-function findHostNodeId(nodes: any[], id: string): string {
-  for (const n of nodes) if (n.data.shots?.some((s: any) => s.id === id)) return n.id;
-  return id;
-}
-

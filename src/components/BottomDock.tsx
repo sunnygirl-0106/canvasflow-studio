@@ -1,8 +1,10 @@
 import { LayoutGrid, Maximize, MousePointer2, Minus, Plus } from "lucide-react";
-import { useState } from "react";
+import { useReactFlow, useViewport } from "@xyflow/react";
 
 export function BottomDock() {
-  const [zoom, setZoom] = useState(100);
+  const { zoomTo } = useReactFlow();
+  const { zoom } = useViewport();
+  const zoomPct = Math.round(zoom * 100);
 
   return (
     <div
@@ -25,13 +27,9 @@ export function BottomDock() {
         <MousePointer2 className="w-[18px] h-[18px]" style={{ color: "#475569" }} strokeWidth={1.8} />
       </DockBtn>
 
-      {/* Divider */}
-      <span
-        className="mx-1 inline-block"
-        style={{ width: 1, height: 18, background: "#E5E7EB" }}
-      />
+      <span className="mx-1 inline-block" style={{ width: 1, height: 18, background: "#E5E7EB" }} />
 
-      <DockBtn onClick={() => setZoom((z) => Math.max(25, z - 10))}>
+      <DockBtn onClick={() => zoomTo(Math.max(0.2, zoom * 0.9), { duration: 150 })}>
         <Minus className="w-[18px] h-[18px]" style={{ color: "#475569" }} strokeWidth={2} />
       </DockBtn>
 
@@ -39,23 +37,17 @@ export function BottomDock() {
         className="text-[13px] font-semibold min-w-[42px] text-center"
         style={{ color: "#0F172A", fontFamily: "Inter, system-ui" }}
       >
-        {zoom}%
+        {zoomPct}%
       </span>
 
-      <DockBtn onClick={() => setZoom((z) => Math.min(200, z + 10))}>
+      <DockBtn onClick={() => zoomTo(Math.min(2, zoom * 1.1), { duration: 150 })}>
         <Plus className="w-[18px] h-[18px]" style={{ color: "#475569" }} strokeWidth={2} />
       </DockBtn>
     </div>
   );
 }
 
-function DockBtn({
-  children,
-  onClick,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-}) {
+function DockBtn({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
   return (
     <button
       onClick={onClick}

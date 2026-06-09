@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { useCanvas, type CanvasNode, type Shot } from "@/store/canvasStore";
+import { CLIP_STYLES } from "@/lib/clipStyles";
+import { fmtSec } from "@/lib/time";
 import {
   Play,
   Pause,
@@ -54,16 +56,6 @@ const COLORS = {
   textTrackLabelDim: "#D0D5DD",
 };
 
-/* ── Clip style definitions ────────────────────────────────── */
-const CLIP_STYLES: Record<Shot["color"], { bg: string; border: string; thumbBg: string; timeColor: string }> = {
-  cyan: { bg: "#0E7490", border: "#67E8F9", thumbBg: "#155E75", timeColor: "#CFFAFE" },
-  purple: { bg: "#5B21B6", border: "#A78BFA", thumbBg: "#6D28D9", timeColor: "#EDE9FE" },
-  yellow: { bg: "#C2410C", border: "#FDBA74", thumbBg: "#9A3412", timeColor: "#FFEDD5" },
-  rose: { bg: "#9F1239", border: "#FDA4AF", thumbBg: "#881337", timeColor: "#FFE4E6" },
-  emerald: { bg: "#047857", border: "#6EE7B7", thumbBg: "#065F46", timeColor: "#D1FAE5" },
-  gray: { bg: "#475569", border: "#94A3B8", thumbBg: "#334155", timeColor: "#E2E8F0" },
-};
-
 /* ── Waveform bars for audio track ─────────────────────────── */
 const WAVE_BARS = [
   { x: 270, h: 12, y: 16 },
@@ -94,12 +86,6 @@ const TRACK_PAD_LEFT = 24;
 const MIN_DURATION_SEC = 2;
 
 /* ── Helpers ───────────────────────────────────────────────── */
-function fmtSec(s: number) {
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-}
-
 interface LayoutClip {
   shot: Shot;
   x: number;
@@ -169,19 +155,25 @@ export function TimelineNode({ id, data }: { id: string; data: CanvasNode["data"
     updateNodeInternals(id);
   }, [shots, id, updateNodeInternals]);
 
-  // Playback
+  // rAF-based playback
   useEffect(() => {
     if (!playing) return;
-    const iv = setInterval(() => {
+    let stopped = false;
+    let lastTs: number | null = null;
+    const tick = (ts: number) => {
+      if (stopped) return;
+      if (lastTs === null) lastTs = ts;
+      const delta = Math.min((ts - lastTs) / 1000, 0.1);
+      lastTs = ts;
       setCurrentTime((t) => {
-        if (t >= totalDuration) {
-          setPlaying(false);
-          return 0;
-        }
-        return t + 0.1;
+        const next = t + delta;
+        if (next >= totalDuration) { setPlaying(false); stopped = true; return 0; }
+        return next;
       });
-    }, 100);
-    return () => clearInterval(iv);
+      if (!stopped) requestAnimationFrame(tick);
+    };
+    const id = requestAnimationFrame(tick);
+    return () => { stopped = true; cancelAnimationFrame(id); };
   }, [playing, totalDuration]);
 
   // Listen for external play event
