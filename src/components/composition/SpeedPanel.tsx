@@ -37,9 +37,9 @@ export function SpeedPanel({ compId, clipId, onClose }: Props) {
       style={{
         width: 280,
         padding: 16,
-        background: "#1E293B",
-        border: "1px solid #334155",
-        boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
+        background: "#FFFFFF",
+        border: "1px solid #E2E8F0",
+        boxShadow: "0 12px 32px rgba(0,0,0,0.1)",
         zIndex: 50,
       }}
     >
@@ -47,13 +47,13 @@ export function SpeedPanel({ compId, clipId, onClose }: Props) {
       <div className="flex items-center justify-between mb-3">
         <span
           className="text-[13px] font-semibold"
-          style={{ color: "#F1F5F9", fontFamily: "PingFang SC, Inter, system-ui" }}
+          style={{ color: "#1E293B", fontFamily: "PingFang SC, Inter, system-ui" }}
         >
           变速
         </span>
         <button
           onClick={onClose}
-          className="flex items-center justify-center rounded hover:bg-white/10"
+          className="flex items-center justify-center rounded hover:bg-black/5"
           style={{ width: 24, height: 24 }}
         >
           <X className="w-3.5 h-3.5" style={{ color: "#94A3B8" }} />
@@ -69,8 +69,8 @@ export function SpeedPanel({ compId, clipId, onClose }: Props) {
             className="flex-1 rounded-md text-[12px] font-semibold transition-colors"
             style={{
               height: 30,
-              background: Math.abs(speed - p) < 0.01 ? "#14B8A6" : "#334155",
-              color: Math.abs(speed - p) < 0.01 ? "#FFFFFF" : "#94A3B8",
+              background: Math.abs(speed - p) < 0.01 ? "#14B8A6" : "#F1F5F9",
+              color: Math.abs(speed - p) < 0.01 ? "#FFFFFF" : "#64748B",
               fontFamily: "Inter, system-ui",
             }}
           >
@@ -85,7 +85,7 @@ export function SpeedPanel({ compId, clipId, onClose }: Props) {
           <span className="text-[11px]" style={{ color: "#64748B" }}>
             倍速
           </span>
-          <span className="text-[12px] font-mono font-semibold" style={{ color: "#F1F5F9" }}>
+          <span className="text-[12px] font-mono font-semibold" style={{ color: "#1E293B" }}>
             {speed.toFixed(2)}x
           </span>
         </div>
@@ -107,7 +107,7 @@ export function SpeedPanel({ compId, clipId, onClose }: Props) {
           <span className="text-[11px]" style={{ color: "#64748B" }}>
             时长
           </span>
-          <span className="text-[12px] font-mono font-semibold" style={{ color: "#F1F5F9" }}>
+          <span className="text-[12px] font-mono font-semibold" style={{ color: "#1E293B" }}>
             {duration.toFixed(1)}s
           </span>
         </div>

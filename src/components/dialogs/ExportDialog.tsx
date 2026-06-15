@@ -11,7 +11,9 @@ export function ExportDialog() {
   if (!exportOpen) return null;
 
   const tl = nodes.find((n) => n.kind === "composition");
-  const shots = tl?.data.shots ?? [];
+  const shots = (tl?.data.tracks ?? [])
+    .find((t) => t.kind === "video")
+    ?.clips ?? [];
   const text =
     exportOpen === "fcpxml" ? buildFcpxml(shots, tl?.data.name ?? "composition") : buildEdl(shots);
 

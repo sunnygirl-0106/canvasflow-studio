@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
   ReactFlowProvider,
+  useStoreApi,
   type NodeProps,
   type Node as RFNode,
   type Edge as RFEdge,
@@ -26,11 +27,14 @@ import { CompositionNode } from "@/components/nodes/CompositionNode";
 import { AudioNode } from "@/components/nodes/AudioNode";
 import { StoryboardGroupNode } from "@/components/nodes/StoryboardGroupNode";
 import { GroupNode } from "@/components/nodes/GroupNode";
+import { TextNode } from "@/components/nodes/TextNode";
+import { ScriptNode } from "@/components/nodes/ScriptNode";
 import { LeftRail } from "@/components/LeftRail";
 import { MultiSelectionCTA } from "@/components/MultiSelectionCTA";
 import { CompositionCoachToast } from "@/components/CompositionCoachToast";
 import { ContextMenu } from "@/components/ContextMenu";
 import { CompositionEditor } from "@/components/composition/CompositionEditor";
+import { ScriptEditor } from "@/components/script/ScriptEditor";
 import { StoryboardToolbar } from "@/components/storyboard/StoryboardToolbar";
 import { GroupToolbar } from "@/components/group/GroupToolbar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -62,6 +66,9 @@ function Workspace() {
       <ErrorBoundary>
         <CompositionEditor />
       </ErrorBoundary>
+      <ErrorBoundary>
+        <ScriptEditor />
+      </ErrorBoundary>
       <ExportDialog />
     </div>
   );
@@ -86,12 +93,16 @@ const nodeTypes = {
   nodeGroup: (props: NodeProps) => (
     <GroupNode id={props.id} data={props.data as CanvasNode["data"]} />
   ),
+  text: (props: NodeProps) => <TextNode id={props.id} data={props.data as CanvasNode["data"]} />,
+  script: (props: NodeProps) => (
+    <ScriptNode id={props.id} data={props.data as CanvasNode["data"]} />
+  ),
 };
 
 function Canvas() {
   const nodes = useCanvas((s) => s.nodes);
   const edges = useCanvas((s) => s.edges);
-  const updateNode = useCanvas((s) => s.updateNode);
+  const batchUpdatePositions = useCanvas((s) => s.batchUpdatePositions);
   const select = useCanvas((s) => s.select);
   const addEdgeFn = useCanvas((s) => s.addEdge);
   const addToComposition = useCanvas((s) => s.addToComposition);
@@ -100,16 +111,33 @@ function Canvas() {
   const redo = useCanvas((s) => s.redo);
   const setContextMenu = useCanvas((s) => s.setContextMenu);
 
-  // Build shotId → hostNodeId index once per nodes change — O(n) vs O(n×m) per edge
-  const shotHostMap = useMemo(() => {
+  // Build clipId → hostNodeId index once per nodes change — O(n) vs O(n×m) per edge
+  const clipHostMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const n of nodes) {
-      for (const sh of n.data.shots ?? []) {
-        map.set(sh.id, n.id);
+      for (const t of n.data.tracks ?? []) {
+        for (const c of t.clips) {
+          map.set(c.id, n.id);
+        }
       }
     }
     return map;
   }, [nodes]);
+
+  const selectedId = useCanvas((s) => s.selectedId);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const skipSyncRef = useRef(false);
+
+  // Sync single-click selection from store into local set,
+  // but skip when onNodesChange just handled the update (avoids clearing drag-selection).
+  useEffect(() => {
+    if (skipSyncRef.current) {
+      skipSyncRef.current = false;
+      return;
+    }
+    if (selectedId) setSelectedIds(new Set([selectedId]));
+    else setSelectedIds(new Set());
+  }, [selectedId]);
 
   const rfNodes = useMemo<RFNode[]>(
     () =>
@@ -120,8 +148,9 @@ function Canvas() {
         data: n.data,
         draggable: true,
         selectable: true,
+        selected: selectedIds.has(n.id),
       })),
-    [nodes],
+    [nodes, selectedIds],
   );
 
   const rfEdges = useMemo<RFEdge[]>(
@@ -130,17 +159,24 @@ function Canvas() {
         id: e.id,
         source: e.from,
         sourceHandle: e.sourceHandle ?? "out",
-        target: shotHostMap.get(e.to) ?? e.to,
-        targetHandle: shotHostMap.has(e.to) ? e.to : (e.toHandle ?? undefined),
+        target: clipHostMap.get(e.to) ?? e.to,
+        targetHandle: clipHostMap.has(e.to) ? e.to : (e.toHandle ?? undefined),
         type: "default",
         animated: true,
         style: { stroke: e.color ?? "#56C7CF", strokeWidth: 2 },
       })),
-    [edges, shotHostMap],
+    [edges, clipHostMap],
   );
 
   const mergeToStoryboard = useCanvas((s) => s.mergeToStoryboard);
   const createGroup = useCanvas((s) => s.createGroup);
+  const rfStore = useStoreApi();
+
+  /** Get currently selected node IDs via ReactFlow internal store (no DOM queries). */
+  const getSelectedNodeIds = useCallback(() => {
+    const rfNodes = rfStore.getState().nodes;
+    return rfNodes.filter((n) => n.selected).map((n) => n.id);
+  }, [rfStore]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -152,10 +188,7 @@ function Canvas() {
       // Cmd+Alt+G / Ctrl+Alt+G → merge selected images to storyboard
       if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
-        const selectedRfNodes = document.querySelectorAll(".react-flow__node.selected");
-        const selectedIds = Array.from(selectedRfNodes)
-          .map((el) => el.getAttribute("data-id"))
-          .filter(Boolean) as string[];
+        const selectedIds = getSelectedNodeIds();
         if (selectedIds.length >= 2) {
           mergeToStoryboard(selectedIds);
         }
@@ -163,10 +196,7 @@ function Canvas() {
       // Cmd+Shift+G / Ctrl+Shift+G → create group
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === "g") {
         e.preventDefault();
-        const selectedRfNodes = document.querySelectorAll(".react-flow__node.selected");
-        const selectedIds = Array.from(selectedRfNodes)
-          .map((el) => el.getAttribute("data-id"))
-          .filter(Boolean) as string[];
+        const selectedIds = getSelectedNodeIds();
         if (selectedIds.length >= 2) {
           createGroup(selectedIds);
         }
@@ -174,18 +204,47 @@ function Canvas() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, mergeToStoryboard, createGroup]);
+  }, [undo, redo, mergeToStoryboard, createGroup, getSelectedNodeIds]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      const posUpdates: Record<string, { x: number; y: number }> = {};
+      const selectionChanges: { id: string; selected: boolean }[] = [];
+
       for (const c of changes) {
         if (c.type === "position" && c.position) {
-          updateNode(c.id, { x: c.position.x, y: c.position.y });
+          posUpdates[c.id] = c.position;
         }
-        if (c.type === "select" && c.selected) select(c.id);
+        if (c.type === "select") {
+          selectionChanges.push({ id: c.id, selected: !!c.selected });
+        }
+      }
+
+      if (Object.keys(posUpdates).length > 0) {
+        batchUpdatePositions(posUpdates);
+      }
+
+      if (selectionChanges.length > 0) {
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const { id: nid, selected: sel } of selectionChanges) {
+            if (sel) next.add(nid);
+            else next.delete(nid);
+          }
+          return next;
+        });
+        // Sync single selection to store for properties panel etc.
+        const newlySelected = selectionChanges.filter((c) => c.selected);
+        if (newlySelected.length === 1) {
+          skipSyncRef.current = true;
+          select(newlySelected[0].id);
+        } else if (selectionChanges.every((c) => !c.selected)) {
+          skipSyncRef.current = true;
+          select(null);
+        }
       }
     },
-    [updateNode, select],
+    [batchUpdatePositions, select],
   );
 
   const onEdgesChange = useCallback(
@@ -216,8 +275,7 @@ function Canvas() {
         }
         return;
       }
-      const target = c.targetHandle ?? c.target;
-      addEdgeFn(c.source, target);
+      addEdgeFn(c.source, c.target, c.sourceHandle ?? undefined, c.targetHandle ?? undefined);
     },
     [nodes, addEdgeFn, addToComposition],
   );

@@ -7,9 +7,10 @@ const MAX_PX = 200;
 interface Props {
   pxPerSec: number;
   onZoom: (next: number) => void;
+  dark?: boolean;
 }
 
-export function ZoomControls({ pxPerSec, onZoom }: Props) {
+export function ZoomControls({ pxPerSec, onZoom, dark }: Props) {
   const editorMode = useCanvas((s) => s.editorMode);
   const setEditorMode = useCanvas((s) => s.setEditorMode);
   const closeComposition = useCanvas((s) => s.closeComposition);
@@ -27,9 +28,9 @@ export function ZoomControls({ pxPerSec, onZoom }: Props) {
     onZoom(Math.round(px * 100) / 100);
   };
 
-  const btnClass = "flex items-center justify-center rounded-lg hover:bg-white/10";
+  const btnClass = `flex items-center justify-center rounded-lg ${dark ? "hover:bg-white/10" : "hover:bg-black/5"}`;
   const btnStyle = { width: 32, height: 32 };
-  const iconStyle = { color: "#94A3B8" };
+  const iconStyle = { color: dark ? "#94A3B8" : "#64748B" };
 
   return (
     <div
@@ -53,7 +54,9 @@ export function ZoomControls({ pxPerSec, onZoom }: Props) {
           height: 4,
           appearance: "none",
           WebkitAppearance: "none",
-          background: `linear-gradient(to right, #64748B 0%, #64748B ${sliderValue * 100}%, #334155 ${sliderValue * 100}%, #334155 100%)`,
+          background: dark
+            ? `linear-gradient(to right, #94A3B8 0%, #94A3B8 ${sliderValue * 100}%, #404056 ${sliderValue * 100}%, #404056 100%)`
+            : `linear-gradient(to right, #94A3B8 0%, #94A3B8 ${sliderValue * 100}%, #E2E8F0 ${sliderValue * 100}%, #E2E8F0 100%)`,
           borderRadius: 2,
           outline: "none",
           cursor: "pointer",
@@ -65,7 +68,7 @@ export function ZoomControls({ pxPerSec, onZoom }: Props) {
         <ZoomIn className="w-4 h-4" style={iconStyle} />
       </button>
 
-      <div className="w-px h-5 mx-1" style={{ background: "#334155" }} />
+      <div className="w-px h-5 mx-1" style={{ background: dark ? "#404056" : "#CBD5E1" }} />
 
       {isFull ? (
         <button onClick={() => setEditorMode("collapsed")} className={btnClass} style={btnStyle} title="收缩">

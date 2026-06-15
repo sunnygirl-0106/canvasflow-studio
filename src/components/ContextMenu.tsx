@@ -11,6 +11,8 @@ import {
   CopyPlus,
   ArrowRightLeft,
   Ungroup,
+  Maximize2,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { useCanvas, type NodeKind } from "@/store/canvasStore";
@@ -106,8 +108,8 @@ export function ContextMenu() {
       )}
       <ConfirmDialog
         open={!!confirmDeleteId}
-        title="删除分镜组"
-        message="确认删除该分镜组？此操作可撤销。"
+        title="删除节点"
+        message="确认删除该节点？此操作可撤销。"
         confirmLabel="删除"
         onConfirm={() => {
           if (confirmDeleteId) removeNode(confirmDeleteId);
@@ -165,7 +167,11 @@ function MenuRow({ item }: { item: Extract<ItemSpec, { kind: "item" }> }) {
         e.currentTarget.style.background = "transparent";
       }}
     >
-      <Icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={1.8} style={{ color: iconColor }} />
+      <Icon
+        className="w-[18px] h-[18px] flex-shrink-0"
+        strokeWidth={1.8}
+        style={{ color: iconColor }}
+      />
       <span
         className="flex-1 text-[14px] font-medium truncate"
         style={{ color: textColor, fontFamily: "PingFang SC, Inter, system-ui" }}
@@ -191,24 +197,28 @@ function MenuRow({ item }: { item: Extract<ItemSpec, { kind: "item" }> }) {
 function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
   const menu = useCanvas((s) => s.contextMenu);
   const nodes = useCanvas((s) => s.nodes);
-  const past = useCanvas((s) => s.past);
+  const canUndo = useCanvas((s) => s.past.length > 0);
   const undo = useCanvas((s) => s.undo);
   const removeNode = useCanvas((s) => s.removeNode);
   const addToComposition = useCanvas((s) => s.addToComposition);
   const duplicateStoryboard = useCanvas((s) => s.duplicateStoryboard);
   const convertGroupToStoryboard = useCanvas((s) => s.convertGroupToStoryboard);
   const ungroupGroup = useCanvas((s) => s.ungroupGroup);
+  const openScript = useCanvas((s) => s.openScript);
+  const regenerateScript = useCanvas((s) => s.regenerateScript);
   const setContextMenu = useCanvas((s) => s.setContextMenu);
 
   return useMemo<ItemSpec[]>(() => {
     if (!menu) return [];
 
-    const target = menu.targetNodeId ? nodes.find((n) => n.id === menu.targetNodeId) ?? null : null;
+    const target = menu.targetNodeId
+      ? (nodes.find((n) => n.id === menu.targetNodeId) ?? null)
+      : null;
     const isMedia = target ? MEDIA_KINDS.includes(target.kind) : false;
     const isStoryboard = target?.kind === "storyboard";
     const isGroup = target?.kind === "nodeGroup";
+    const isScript = target?.kind === "script";
     const hasComposition = nodes.some((n) => n.kind === "composition");
-    const canUndo = past.length > 0;
     const close = () => setContextMenu(null);
 
     const items: ItemSpec[] = [];
@@ -306,6 +316,57 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
         onClick: () => {
           removeNode(target.id);
           close();
+        },
+      });
+      return items;
+    }
+
+    // ── Script-specific menu ──
+    if (isScript && target) {
+      items.push({
+        kind: "item",
+        key: "script-fullscreen",
+        icon: Maximize2,
+        label: "全屏脚本",
+        onClick: () => {
+          openScript(target.id);
+          close();
+        },
+      });
+      if (target.data.script?.status === "ready") {
+        items.push({
+          kind: "item",
+          key: "script-regen",
+          icon: RefreshCw,
+          label: "重新生成",
+          onClick: () => {
+            if (confirm("重新生成将覆盖已有内容，是否继续？")) {
+              regenerateScript(target.id);
+            }
+            close();
+          },
+        });
+      }
+      items.push({ kind: "divider", key: "sc0" });
+      items.push({
+        kind: "item",
+        key: "script-copy",
+        icon: Copy,
+        label: "复制脚本节点",
+        shortcut: "⌘C",
+        onClick: () => close(),
+      });
+      items.push({ kind: "divider", key: "sc1" });
+      items.push({
+        kind: "item",
+        key: "script-delete",
+        icon: Trash2,
+        label: "删除脚本节点",
+        shortcut: "⌘⌫",
+        variant: "destructive",
+        onClick: () => {
+          close();
+          onConfirmDelete(target.id);
         },
       });
       return items;
@@ -410,5 +471,19 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
     }
 
     return items;
-  }, [menu, nodes, past, undo, removeNode, addToComposition, duplicateStoryboard, convertGroupToStoryboard, ungroupGroup, setContextMenu, onConfirmDelete]);
+  }, [
+    menu,
+    nodes,
+    canUndo,
+    undo,
+    removeNode,
+    addToComposition,
+    duplicateStoryboard,
+    convertGroupToStoryboard,
+    ungroupGroup,
+    openScript,
+    regenerateScript,
+    setContextMenu,
+    onConfirmDelete,
+  ]);
 }

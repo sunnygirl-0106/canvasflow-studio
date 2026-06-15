@@ -6,9 +6,10 @@ interface Props {
   currentTime: number;
   selectedClipId: string | null;
   onOpenSpeed: () => void;
+  dark?: boolean;
 }
 
-export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed }: Props) {
+export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed, dark }: Props) {
   const undo = useCanvas((s) => s.undo);
   const redo = useCanvas((s) => s.redo);
   const splitClip = useCanvas((s) => s.splitClip);
@@ -51,10 +52,9 @@ export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed
     cropClip(compId, info.shot.id, "left", info.offset);
   };
 
-  const btnClass =
-    "flex items-center justify-center rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:cursor-default";
+  const btnClass = `flex items-center justify-center rounded-lg ${dark ? "hover:bg-white/10" : "hover:bg-black/5"} disabled:opacity-30 disabled:cursor-default`;
   const btnStyle = { width: 36, height: 36 };
-  const iconStyle = { color: "#CBD5E1" };
+  const iconStyle = { color: dark ? "#94A3B8" : "#64748B" };
 
   return (
     <div
@@ -62,8 +62,8 @@ export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed
       style={{
         height: 40,
         padding: "0 12px",
-        background: "#1E293B",
-        borderTop: "1px solid #334155",
+        background: dark ? "#262637" : "#F1F5F9",
+        borderTop: `1px solid ${dark ? "#333348" : "#E2E8F0"}`,
       }}
     >
       <button
@@ -85,7 +85,7 @@ export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed
         <Redo2 className="w-4 h-4" style={iconStyle} />
       </button>
 
-      <div className="w-px h-5 mx-1" style={{ background: "#334155" }} />
+      <div className="w-px h-5 mx-1" style={{ background: dark ? "#404056" : "#CBD5E1" }} />
 
       <button
         onClick={handleSplit}
@@ -116,7 +116,7 @@ export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed
       </button>
 
       {/* Speed — disabled when no clip selected */}
-      <div className="w-px h-5 mx-1" style={{ background: "#334155" }} />
+      <div className="w-px h-5 mx-1" style={{ background: dark ? "#404056" : "#CBD5E1" }} />
       <button
         onClick={onOpenSpeed}
         disabled={!selectedClipId}
@@ -124,7 +124,7 @@ export function EditorToolbar({ compId, currentTime, selectedClipId, onOpenSpeed
         style={btnStyle}
         title="变速"
       >
-        <Gauge className="w-4 h-4" style={{ color: selectedClipId ? "#94A3B8" : "#475569" }} />
+        <Gauge className="w-4 h-4" style={{ color: selectedClipId ? (dark ? "#94A3B8" : "#64748B") : (dark ? "#4A4A5C" : "#CBD5E1") }} />
       </button>
     </div>
   );

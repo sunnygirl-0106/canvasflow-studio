@@ -3,17 +3,7 @@ import { useState } from "react";
 import { Video, Upload, Loader2, Play } from "lucide-react";
 import { useCanvas, type CanvasNode } from "@/store/canvasStore";
 import { VideoPromptPanel } from "@/components/VideoPromptPanel";
-
-const COLORS = {
-  border: "#56C7CF",
-  headerText: "#0F172A",
-  handle: "#14B8A6",
-  dropBorder: "#CBD5E1",
-  dropBg: "#FFFFFF",
-  dropIcon: "#94A3B8",
-  dropTextPrimary: "#64748B",
-  dropTextMuted: "#CBD5E1",
-};
+import { NODE_COLORS as COLORS } from "./nodeTheme";
 
 export function GenerateVideoNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
   const updateNode = useCanvas((s) => s.updateNode);
@@ -24,9 +14,10 @@ export function GenerateVideoNode({ id, data }: { id: string; data: CanvasNode["
     setBusy(true);
     setTimeout(() => {
       const seed = Math.random().toString(36).slice(2, 7);
-      updateNode(id, {
-        data: { ...data, src: `https://picsum.photos/seed/${seed}/640/360`, duration: 8 },
-      } as any);
+      updateNode(id, (n) => ({
+        ...n,
+        data: { ...n.data, src: `https://picsum.photos/seed/${seed}/640/360`, duration: 8 },
+      }));
       setBusy(false);
     }, 1200);
   };

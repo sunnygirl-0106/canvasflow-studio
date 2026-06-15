@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Plus, Volume2, VolumeX, Trash2 } from "lucide-react";
+import { Plus, Volume2, VolumeX, Play, Music } from "lucide-react";
 import {
   useCanvas,
   compDuration,
@@ -19,7 +19,6 @@ const CLIP_Y = 8;
 const TRACK_PAD_LEFT = 16;
 const SIDEBAR_W = 84;
 const MIN_DURATION_SEC = 0.5;
-const ADD_ROW_H = 36;
 const TRACKS_MAX_H = 3 * TRACK_H + 8; // vertical scroll kicks in beyond this
 const SNAP_PX = 8; // edge/playhead snap threshold
 
@@ -41,8 +40,6 @@ function orderTracks(tracks: Track[]): Track[] {
     .sort((a, b) => a.name.localeCompare(b.name));
   return [...vids, ...auds];
 }
-
-const isV1 = (t: Track) => t.kind === "video" && t.name === "V1";
 
 function findClipById(tracks: Track[], id: string): Clip | null {
   for (const t of tracks) {
@@ -134,11 +131,12 @@ interface DragPos {
 
 /** Where a dragged clip would land. */
 type DropDecision =
-  | { action: "move"; trackId: string; startSec: number; previewIdx: number; intoV1: boolean }
+  | { action: "move"; trackId: string; startSec: number; previewIdx: number }
   | { action: "createV2"; startSec: number; previewIdx: number }
+  | { action: "createAudio"; startSec: number; previewIdx: number }
   | {
       action: "reject";
-      reason: "max-video" | "type" | "nofit";
+      reason: "max-video" | "nofit";
       startSec: number;
       previewIdx: number;
     };
@@ -153,6 +151,7 @@ interface Props {
   onSeek: (t: number) => void;
   muted: boolean;
   onToggleMute: () => void;
+  dark?: boolean;
 }
 
 export function TrackTimeline({
@@ -164,13 +163,12 @@ export function TrackTimeline({
   onSeek,
   muted,
   onToggleMute,
+  dark,
 }: Props) {
   const updateClip = useCanvas((s) => s.updateClip);
-  const reorderVideoTrack = useCanvas((s) => s.reorderVideoTrack);
   const moveClip = useCanvas((s) => s.moveClip);
   const addVideoTrack = useCanvas((s) => s.addVideoTrack);
   const addAudioTrack = useCanvas((s) => s.addAudioTrack);
-  const removeTrack = useCanvas((s) => s.removeTrack);
   const toggleClipMute = useCanvas((s) => s.toggleClipMute);
   const pushHistory = useCanvas((s) => s.pushHistory);
   const selectClip = useCanvas((s) => s.selectClip);
@@ -195,8 +193,23 @@ export function TrackTimeline({
   const subTicks = useMemo(() => buildSubTicks(pxPerSec, contentWidth), [pxPerSec, contentWidth]);
   const gridLines = useMemo(() => buildGridLines(pxPerSec, contentWidth), [pxPerSec, contentWidth]);
 
-  const tracksTotalH = ordered.length * TRACK_H + ADD_ROW_H;
+  const isDraggingAudio = dragState
+    ? findClipById(tracks, dragState.clipId)?.clipKind === "audio"
+    : false;
+  const tracksTotalH = ordered.length * TRACK_H + (isDraggingAudio ? TRACK_H : 0);
   const playheadX = SIDEBAR_W + TRACK_PAD_LEFT + currentTime * pxPerSec;
+
+  /** Detect gaps in video tracks */
+  const hasVideoGap = useMemo(() => {
+    for (const t of tracks) {
+      if (t.kind !== "video" || t.clips.length < 2) continue;
+      const sorted = [...t.clips].sort((a, b) => a.startSec - b.startSec);
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].startSec > clipEnd(sorted[i - 1]) + 0.05) return true;
+      }
+    }
+    return false;
+  }, [tracks]);
 
   /* ── Pointer → timeline coordinates ──────────────────────── */
   const laneXFromEvent = useCallback((clientX: number) => {
@@ -254,15 +267,6 @@ export function TrackTimeline({
       if (clip.clipKind === "video") {
         if (target && target.kind === "video") {
           const start = snapStart(rawStart, target, clip.id);
-          if (isV1(target)) {
-            return {
-              action: "move",
-              trackId: target.id,
-              startSec: Math.max(0, start),
-              previewIdx: hoverIdx,
-              intoV1: true,
-            };
-          }
           const s = findFreeStart(target, clip, Math.max(0, start));
           if (s == null)
             return {
@@ -276,7 +280,6 @@ export function TrackTimeline({
             trackId: target.id,
             startSec: s,
             previewIdx: hoverIdx,
-            intoV1: false,
           };
         }
         // not over a video track → auto-create V2 (decision #3) if there is room
@@ -311,15 +314,14 @@ export function TrackTimeline({
           trackId: target.id,
           startSec: s,
           previewIdx: hoverIdx,
-          intoV1: false,
         };
       }
+      // below all tracks or over a video track → auto-create a new audio track
       return {
-        action: "reject",
-        reason: "type",
-        startSec: Math.max(0, round1(rawStart)),
-        previewIdx: clampHover,
-      };
+        action: "createAudio",
+        startSec: Math.max(0, snapStart(rawStart, undefined, clip.id)),
+        previewIdx: ordered.length,
+      } as DropDecision;
     },
     [ordered, videoTrackCount, pxPerSec, snapStart],
   );
@@ -388,38 +390,6 @@ export function TrackTimeline({
     [compId, pxPerSec, updateClip, pushHistory],
   );
 
-  /* ── Intra-V1 reorder (keeps the precise mid-point feel) ── */
-  const reorderV1Drop = useCallback(
-    (trackId: string, clip: Clip, laneX: number, offsetX: number) => {
-      const cur = useCanvas
-        .getState()
-        .nodes.find((n) => n.id === compId)
-        ?.data.tracks?.find((t) => t.id === trackId);
-      if (!cur) return;
-      const sorted = [...cur.clips].sort((a, b) => a.startSec - b.startSec);
-      const ghostCenter = laneX - offsetX + clipW(clip, pxPerSec) / 2;
-      let dropIdx = sorted.length;
-      let cursor = TRACK_PAD_LEFT;
-      for (let i = 0; i < sorted.length; i++) {
-        const w = sorted[i].duration * pxPerSec;
-        if (ghostCenter < cursor + w / 2) {
-          dropIdx = i;
-          break;
-        }
-        cursor += w;
-      }
-      const dragIdx = sorted.findIndex((c) => c.id === clip.id);
-      if (dragIdx !== -1 && dropIdx !== dragIdx && dropIdx !== dragIdx + 1) {
-        const ids = sorted.map((c) => c.id);
-        const [removed] = ids.splice(dragIdx, 1);
-        ids.splice(dropIdx > dragIdx ? dropIdx - 1 : dropIdx, 0, removed);
-        pushHistory();
-        reorderVideoTrack(compId, trackId, ids);
-      }
-    },
-    [compId, pxPerSec, pushHistory, reorderVideoTrack],
-  );
-
   /* ── Clip drag (2D: cross-track + auto-create V2) ───────── */
   const handleClipDragStart = useCallback(
     (track: Track, clip: Clip, e: React.PointerEvent) => {
@@ -447,26 +417,28 @@ export function TrackTimeline({
         const dec = computeDrop(fresh, lx, cy, offsetX);
 
         if (dec.action === "move") {
-          if (dec.intoV1 && dec.trackId === track.id) {
-            reorderV1Drop(track.id, fresh, lx, offsetX); // intra-V1 reorder
-          } else {
-            const sameSpot =
-              dec.trackId === track.id && Math.abs(dec.startSec - fresh.startSec) < 0.05;
-            if (!sameSpot) moveClip(compId, fresh.id, dec.trackId, dec.startSec);
-          }
+          const sameSpot =
+            dec.trackId === track.id && Math.abs(dec.startSec - fresh.startSec) < 0.05;
+          if (!sameSpot) moveClip(compId, fresh.id, dec.trackId, dec.startSec);
         } else if (dec.action === "createV2") {
           addVideoTrack(compId);
           const v2 = (
             useCanvas.getState().nodes.find((n) => n.id === compId)?.data.tracks ?? []
           ).find((t) => t.kind === "video" && t.name === "V2");
           if (v2) moveClip(compId, fresh.id, v2.id, dec.startSec);
+        } else if (dec.action === "createAudio") {
+          addAudioTrack(compId);
+          const freshTracks2 =
+            useCanvas.getState().nodes.find((n) => n.id === compId)?.data.tracks ?? [];
+          const newAudio = freshTracks2
+            .filter((t) => t.kind === "audio")
+            .sort((a, b) => b.name.localeCompare(a.name))[0];
+          if (newAudio) moveClip(compId, fresh.id, newAudio.id, dec.startSec);
         } else {
           showToast(
             dec.reason === "max-video"
               ? `视频轨最多 ${MAX_VIDEO_TRACKS} 条`
-              : dec.reason === "type"
-                ? "类型不匹配，无法放入该轨"
-                : "该轨没有空位",
+              : "该轨没有空位",
           );
         }
 
@@ -484,7 +456,6 @@ export function TrackTimeline({
       computeDrop,
       moveClip,
       addVideoTrack,
-      reorderV1Drop,
       showToast,
     ],
   );
@@ -492,11 +463,14 @@ export function TrackTimeline({
   /* ── Live drop preview (ghost + indicator) ───────────── */
   const livePreview = useMemo(() => {
     if (!dragState || !dragPos) return null;
-    const clip = findClipById(tracks, dragState.clipId);
+    // Read latest tracks from store to avoid re-running on every tracks change
+    const freshTracks =
+      useCanvas.getState().nodes.find((n) => n.id === compId)?.data.tracks ?? [];
+    const clip = findClipById(freshTracks, dragState.clipId);
     if (!clip) return null;
     const dec = computeDrop(clip, dragPos.laneX, dragPos.contentY, dragState.offsetX);
     return { clip, dec };
-  }, [dragState, dragPos, tracks, computeDrop]);
+  }, [dragState, dragPos, compId, computeDrop]);
 
   /* ── Render a single clip ────────────────────────────── */
   const renderClip = (track: Track, clip: Clip) => {
@@ -659,7 +633,7 @@ export function TrackTimeline({
   };
 
   return (
-    <div className="relative flex-shrink-0" style={{ borderTop: "1px solid #1F2937" }}>
+    <div className="relative flex-shrink-0" style={{ borderTop: `1px solid ${dark ? "#333348" : "#E2E8F0"}` }}>
       {/* constraint toast */}
       {toast && (
         <div
@@ -667,10 +641,10 @@ export function TrackTimeline({
           style={{
             top: 8,
             zIndex: 50,
-            background: "#7F1D1D",
-            color: "#FECACA",
-            border: "1px solid #B91C1C",
-            boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+            background: "#FEF2F2",
+            color: "#991B1B",
+            border: "1px solid #FECACA",
+            boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
           }}
         >
           {toast}
@@ -680,7 +654,7 @@ export function TrackTimeline({
       <div
         ref={containerRef}
         className="relative overflow-auto"
-        style={{ maxHeight: RULER_H + TRACKS_MAX_H, background: "#111827" }}
+        style={{ maxHeight: RULER_H + TRACKS_MAX_H, background: dark ? "#1E1E2E" : "#FFFFFF" }}
       >
         <div
           style={{
@@ -697,28 +671,34 @@ export function TrackTimeline({
               style={{
                 width: SIDEBAR_W,
                 height: RULER_H,
-                background: "#1E293B",
+                background: dark ? "#222235" : "#F8FAFC",
                 zIndex: 40,
-                borderRight: "1px solid #1F2937",
+                borderRight: `1px solid ${dark ? "#333348" : "#E2E8F0"}`,
               }}
             >
-              <button
-                onClick={onToggleMute}
-                className="flex items-center justify-center rounded hover:bg-white/10"
-                style={{ width: 26, height: 22 }}
-                title={muted ? "取消静音" : "全局静音"}
-              >
-                {muted ? (
-                  <VolumeX className="w-4 h-4" style={{ color: "#EF4444" }} />
-                ) : (
-                  <Volume2 className="w-4 h-4" style={{ color: "#64748B" }} />
-                )}
-              </button>
+              {hasVideoGap ? (
+                <span className="text-[10px] font-semibold" style={{ color: dark ? "#FBBF24" : "#F59E0B" }}>
+                  有视频空隙
+                </span>
+              ) : (
+                <button
+                  onClick={onToggleMute}
+                  className={`flex items-center justify-center rounded ${dark ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                  style={{ width: 26, height: 22 }}
+                  title={muted ? "取消静音" : "全局静音"}
+                >
+                  {muted ? (
+                    <VolumeX className="w-4 h-4" style={{ color: "#EF4444" }} />
+                  ) : (
+                    <Volume2 className="w-4 h-4" style={{ color: dark ? "#94A3B8" : "#64748B" }} />
+                  )}
+                </button>
+              )}
             </div>
             {/* ruler ticks */}
             <div
               className="relative cursor-pointer flex-shrink-0"
-              style={{ width: contentWidth, height: RULER_H, background: "#1F2937" }}
+              style={{ width: contentWidth, height: RULER_H, background: dark ? "#262637" : "#F1F5F9" }}
               onClick={handleRulerClick}
             >
               {ticks.map((tick, i) => (
@@ -728,7 +708,7 @@ export function TrackTimeline({
                   style={{
                     left: tick.x,
                     top: 12,
-                    color: "#64748B",
+                    color: dark ? "#8B95A8" : "#64748B",
                     fontFamily: "Inter, monospace",
                   }}
                 >
@@ -739,14 +719,14 @@ export function TrackTimeline({
                 <div
                   key={`sub-${i}`}
                   className="absolute"
-                  style={{ left: st.x, bottom: 0, width: 1, height: 8, background: "#334155" }}
+                  style={{ left: st.x, bottom: 0, width: 1, height: 8, background: dark ? "#404056" : "#CBD5E1" }}
                 />
               ))}
               {ticks.map((tick, i) => (
                 <div
                   key={`major-${i}`}
                   className="absolute"
-                  style={{ left: tick.x, bottom: 0, width: 1, height: 14, background: "#475569" }}
+                  style={{ left: tick.x, bottom: 0, width: 1, height: 14, background: dark ? "#6B7280" : "#94A3B8" }}
                 />
               ))}
             </div>
@@ -763,31 +743,31 @@ export function TrackTimeline({
                   style={{
                     width: SIDEBAR_W,
                     height: TRACK_H,
-                    background: "#1E293B",
-                    borderRight: "1px solid #1F2937",
-                    borderTop: "1px solid #0F172A",
+                    background: dark ? "#222235" : "#F8FAFC",
+                    borderRight: `1px solid ${dark ? "#333348" : "#E2E8F0"}`,
+                    borderTop: `1px solid ${dark ? "#333348" : "#E2E8F0"}`,
                     zIndex: 20,
                   }}
                 >
-                  <span
-                    className="text-[12px] font-semibold"
-                    style={{
-                      color: isVideo ? "#93C5FD" : "#6EE7B7",
-                      fontFamily: "Inter, system-ui",
-                    }}
-                  >
-                    {track.name}
-                  </span>
-                  {!isVideo && (
+                  <div className="flex items-center gap-2">
+                    {isVideo ? (
+                      <Play className="w-4 h-4" style={{ color: "#93C5FD" }} />
+                    ) : (
+                      <Music className="w-4 h-4" style={{ color: "#6EE7B7" }} />
+                    )}
                     <button
-                      onClick={() => removeTrack(compId, track.id)}
-                      className="flex items-center justify-center rounded hover:bg-white/10"
-                      style={{ width: 22, height: 18 }}
-                      title="删除音频轨"
+                      onClick={onToggleMute}
+                      className={`flex items-center justify-center rounded ${dark ? "hover:bg-white/10" : "hover:bg-black/5"}`}
+                      style={{ width: 22, height: 22 }}
+                      title={muted ? "取消静音" : "静音"}
                     >
-                      <Trash2 className="w-3 h-3" style={{ color: "#94A3B8" }} />
+                      {muted ? (
+                        <VolumeX className="w-3.5 h-3.5" style={{ color: "#EF4444" }} />
+                      ) : (
+                        <Volume2 className="w-3.5 h-3.5" style={{ color: dark ? "#8B95A8" : "#94A3B8" }} />
+                      )}
                     </button>
-                  )}
+                  </div>
                 </div>
 
                 {/* lane */}
@@ -796,8 +776,10 @@ export function TrackTimeline({
                   style={{
                     width: contentWidth,
                     height: TRACK_H,
-                    background: isVideo ? "#162032" : "#13212A",
-                    borderTop: "1px solid #0F172A",
+                    background: dark
+                      ? (isVideo ? "#1E1E2E" : "#1C1E2B")
+                      : (isVideo ? "#FAFBFD" : "#F5F9FC"),
+                    borderTop: `1px solid ${dark ? "#333348" : "#E2E8F0"}`,
                   }}
                   onClick={(e) => {
                     if (e.target === e.currentTarget) selectClip(null);
@@ -808,7 +790,7 @@ export function TrackTimeline({
                     <div
                       key={i}
                       className="absolute"
-                      style={{ left: x, top: 0, width: 1, height: TRACK_H, background: "#1F2937" }}
+                      style={{ left: x, top: 0, width: 1, height: TRACK_H, background: dark ? "#2A2A3C" : "#F1F5F9" }}
                     />
                   ))}
 
@@ -821,12 +803,12 @@ export function TrackTimeline({
                         top: CLIP_Y,
                         width: 360,
                         height: CLIP_H,
-                        background: "#1F2937",
-                        border: "1.5px dashed #475467",
+                        background: dark ? "#262637" : "#F1F5F9",
+                        border: `1.5px dashed ${dark ? "#404056" : "#CBD5E1"}`,
                       }}
                     >
-                      <Plus className="w-4 h-4" style={{ color: "#64748B" }} />
-                      <span className="text-[12px] font-medium" style={{ color: "#64748B" }}>
+                      <Plus className="w-4 h-4" style={{ color: dark ? "#6B7280" : "#64748B" }} />
+                      <span className="text-[12px] font-medium" style={{ color: dark ? "#6B7280" : "#64748B" }}>
                         把素材拖到这里
                       </span>
                     </div>
@@ -838,51 +820,6 @@ export function TrackTimeline({
               </div>
             );
           })}
-
-          {/* ── Add-track row ── */}
-          <div className="flex" style={{ height: ADD_ROW_H }}>
-            <div
-              className="sticky left-0 flex items-center justify-center gap-1 flex-shrink-0"
-              style={{
-                width: SIDEBAR_W,
-                height: ADD_ROW_H,
-                background: "#1E293B",
-                borderRight: "1px solid #1F2937",
-                borderTop: "1px solid #0F172A",
-                zIndex: 20,
-              }}
-            >
-              <button
-                onClick={() => addVideoTrack(compId)}
-                disabled={videoTrackCount >= MAX_VIDEO_TRACKS}
-                className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-default"
-                title={
-                  videoTrackCount >= MAX_VIDEO_TRACKS
-                    ? `视频轨最多 ${MAX_VIDEO_TRACKS} 条`
-                    : "添加视频轨"
-                }
-              >
-                <Plus className="w-3 h-3" style={{ color: "#93C5FD" }} />
-                <span className="text-[10px]" style={{ color: "#93C5FD" }}>
-                  视
-                </span>
-              </button>
-              <button
-                onClick={() => addAudioTrack(compId)}
-                className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-white/10"
-                title="添加音频轨"
-              >
-                <Plus className="w-3 h-3" style={{ color: "#6EE7B7" }} />
-                <span className="text-[10px]" style={{ color: "#6EE7B7" }}>
-                  音
-                </span>
-              </button>
-            </div>
-            <div
-              className="flex-shrink-0"
-              style={{ width: contentWidth, height: ADD_ROW_H, background: "#111827" }}
-            />
-          </div>
 
           {/* ── Live drop preview (target highlight + ghost + line) ── */}
           {livePreview &&
@@ -951,16 +888,20 @@ export function TrackTimeline({
                         + 新建视频轨 V2
                       </span>
                     )}
+                    {dec.action === "createAudio" && (
+                      <span
+                        className="absolute text-[9px] font-semibold"
+                        style={{ left: 8, bottom: 4, color: "#6EE7B7" }}
+                      >
+                        + 新建音频轨
+                      </span>
+                    )}
                     {!ok && (
                       <span
                         className="absolute text-[9px] font-semibold"
                         style={{ left: 8, bottom: 4, color: "#FCA5A5" }}
                       >
-                        {dec.reason === "type"
-                          ? "类型不符"
-                          : dec.reason === "max-video"
-                            ? "已满 2 轨"
-                            : "无空位"}
+                        {dec.reason === "max-video" ? "已满 2 轨" : "无空位"}
                       </span>
                     )}
                   </div>
@@ -969,34 +910,44 @@ export function TrackTimeline({
             })()}
 
           {/* ── Playhead (spans ruler + all tracks) ── */}
+          {/* Vertical line */}
           <div
-            className="absolute top-0 pointer-events-none"
+            className="absolute pointer-events-none"
             style={{
               left: playheadX,
-              width: 2,
-              height: RULER_H + ordered.length * TRACK_H,
-              background: "#F04438",
+              top: RULER_H,
+              width: 1,
+              height: ordered.length * TRACK_H,
+              background: dark ? "#E2E8F0" : "#334155",
+              opacity: 0.7,
               zIndex: 35,
             }}
           />
+          {/* Top handle: triangle + line */}
           <div
-            className="absolute flex items-center justify-center rounded-full cursor-grab active:cursor-grabbing"
+            className="absolute cursor-grab active:cursor-grabbing"
             style={{
-              left: playheadX - 16,
-              top: 2,
-              width: 32,
-              height: 18,
-              background: "#F04438",
+              left: playheadX - 6,
+              top: 0,
+              width: 12,
+              height: RULER_H + ordered.length * TRACK_H,
               zIndex: 36,
             }}
             onPointerDown={handlePlayheadDrag}
           >
-            <span
-              className="text-[9px] font-bold"
-              style={{ color: "#FFFFFF", fontFamily: "Inter, monospace" }}
+            {/* Triangle indicator */}
+            <svg
+              width="12"
+              height={RULER_H}
+              viewBox={`0 0 12 ${RULER_H}`}
+              className="pointer-events-none"
             >
-              {fmtSec(currentTime)}
-            </span>
+              <path
+                d={`M1,2 L11,2 L11,${RULER_H - 8} L7,${RULER_H} L5,${RULER_H} L1,${RULER_H - 8} Z`}
+                fill={dark ? "#E2E8F0" : "#334155"}
+                fillOpacity="0.9"
+              />
+            </svg>
           </div>
         </div>
       </div>

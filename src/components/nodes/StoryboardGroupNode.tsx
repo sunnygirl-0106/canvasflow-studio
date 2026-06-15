@@ -1,26 +1,19 @@
 import { useCallback, useRef, useState } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { Grid3X3 } from "lucide-react";
+import { Grid3X3, ChevronDown, ArrowUp, Loader2, Sparkles, Clapperboard } from "lucide-react";
 import type { CanvasNode, StoryboardCell } from "@/store/canvasStore";
 import { STORYBOARD_CELL_PX, STORYBOARD_GAP_PX, useCanvas } from "@/store/canvasStore";
 import { cellSize, cellLabel } from "@/lib/storyboard";
-
-const COLORS = {
-  border: "#56C7CF",
-  handle: "#14B8A6",
-  headerText: "#0F172A",
-  subtitleText: "#64748B",
-  emptyBg: "#F1F5F9",
-  emptyText: "#CBD5E1",
-  indexBg: "rgba(255,255,255,0.85)",
-  indexText: "#334155",
-  dropHighlight: "rgba(86,199,207,0.25)",
-};
+import { NODE_COLORS as COLORS } from "./nodeTheme";
 
 export function StoryboardGroupNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
   const sb = data.storyboard;
   const reorderCells = useCanvas((s) => s.reorderStoryboardCells);
+  const batchVideoSbId = useCanvas((s) => s.batchVideoSbId);
+  const setBatchVideoSbId = useCanvas((s) => s.setBatchVideoSbId);
+  const batchGenerateVideo = useCanvas((s) => s.batchGenerateVideo);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
   const dragFromIdx = useRef<number | null>(null);
 
   const onCellDragStart = useCallback((idx: number) => {
@@ -126,6 +119,22 @@ export function StoryboardGroupNode({ id, data }: { id: string; data: CanvasNode
         ))}
       </div>
 
+      {/* Batch video bar */}
+      {batchVideoSbId === id && (
+        <BatchVideoBar
+          cellCount={filledCount}
+          generating={generating}
+          onClose={() => setBatchVideoSbId(null)}
+          onGenerate={() => {
+            setGenerating(true);
+            setTimeout(() => {
+              batchGenerateVideo(id);
+              setGenerating(false);
+            }, 1500);
+          }}
+        />
+      )}
+
       <Handle
         type="source"
         position={Position.Right}
@@ -134,6 +143,113 @@ export function StoryboardGroupNode({ id, data }: { id: string; data: CanvasNode
       />
     </div>
   );
+}
+
+function BatchVideoBar({
+  cellCount,
+  generating,
+  onClose: _onClose,
+  onGenerate,
+}: {
+  cellCount: number;
+  generating: boolean;
+  onClose: () => void;
+  onGenerate: () => void;
+}) {
+  const costPerShot = 197;
+  const totalCost = cellCount * costPerShot;
+
+  return (
+    <div
+      className="flex items-center justify-center nodrag"
+      style={{ padding: "8px 16px 14px" }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div
+        className="inline-flex items-center gap-2.5 rounded-full"
+        style={{
+          padding: "6px 6px 6px 14px",
+          background: "#FFFFFF",
+          border: "1px solid #E5E7EB",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+          fontFamily: "PingFang SC, Inter, system-ui",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {/* Model */}
+        <div className="flex items-center gap-1.5">
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "#22C55E",
+              flexShrink: 0,
+            }}
+          />
+          <span className="text-[11px] font-semibold" style={{ color: "#334155" }}>
+            SD 2.0
+          </span>
+          <ChevronDown className="w-3 h-3" style={{ color: "#94A3B8" }} />
+        </div>
+
+        <BarSep />
+
+        <Clapperboard className="w-3.5 h-3.5" style={{ color: "#64748B" }} />
+
+        <BarSep />
+
+        <span className="text-[11px]" style={{ color: "#334155" }}>
+          9:16 · 720p · 5s
+        </span>
+
+        <BarSep />
+
+        <span className="text-[11px]" style={{ color: "#64748B" }}>
+          全部 {cellCount} 个分镜
+        </span>
+
+        <BarSep />
+
+        <span className="text-[11px]" style={{ color: "#0F766E" }}>
+          本次预计消耗
+        </span>
+
+        <div className="flex items-center gap-1">
+          <Sparkles className="w-3.5 h-3.5" style={{ color: "#F59E0B" }} />
+          <span className="text-[14px] font-bold" style={{ color: "#334155" }}>
+            {totalCost}
+          </span>
+          <span className="text-[11px] font-medium" style={{ color: "#334155" }}>
+            星钻
+          </span>
+        </div>
+
+        {/* Generate */}
+        <button
+          className="flex items-center justify-center text-white transition-opacity disabled:opacity-40"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            background: cellCount > 0 ? "#334155" : "#CBD5E1",
+          }}
+          disabled={generating || cellCount === 0}
+          onClick={onGenerate}
+        >
+          {generating ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <ArrowUp className="w-3.5 h-3.5" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BarSep() {
+  return <span className="inline-block" style={{ width: 1, height: 18, background: "#E2E8F0" }} />;
 }
 
 function CellSlot({

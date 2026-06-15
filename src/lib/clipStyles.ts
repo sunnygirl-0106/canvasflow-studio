@@ -1,4 +1,4 @@
-import type { Shot } from "@/store/canvasStore";
+import type { Clip } from "@/store/canvasStore";
 
 export interface ClipStyle {
   bg: string;
@@ -7,7 +7,7 @@ export interface ClipStyle {
   timeColor: string;
 }
 
-export const CLIP_STYLES: Record<Shot["color"], ClipStyle> = {
+export const CLIP_STYLES: Record<Clip["color"], ClipStyle> = {
   cyan:    { bg: "#0E7490", border: "#67E8F9", thumbBg: "#155E75", timeColor: "#CFFAFE" },
   purple:  { bg: "#5B21B6", border: "#A78BFA", thumbBg: "#6D28D9", timeColor: "#EDE9FE" },
   yellow:  { bg: "#C2410C", border: "#FDBA74", thumbBg: "#9A3412", timeColor: "#FFEDD5" },

@@ -11,7 +11,7 @@ export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["
     setBusy(true);
     setTimeout(() => {
       const seed = Math.random().toString(36).slice(2, 7);
-      updateNode(id, { data: { ...data, src: `https://picsum.photos/seed/${seed}/400/225` } } as any);
+      updateNode(id, (n) => ({ ...n, data: { ...n.data, src: `https://picsum.photos/seed/${seed}/400/225` } }));
       setBusy(false);
     }, 2000);
   };
@@ -29,13 +29,16 @@ export function GenerateImageNode({ id, data }: { id: string; data: CanvasNode["
           </div>
         )}
       </div>
-      <button
-        onClick={generate}
-        disabled={busy}
-        className="text-xs py-1.5 bg-primary/30 hover:bg-primary/50 text-foreground border-t border-border flex items-center justify-center gap-1.5 transition-colors rounded-b-[10px]"
-      >
-        {busy ? <><Loader2 className="w-3 h-3 animate-spin" />生成中…</> : <><Sparkles className="w-3 h-3" />生成</>}
-      </button>
+      <div className="px-3 py-1.5 flex items-center justify-between border-t border-border">
+        <div className="text-xs text-foreground truncate">{data.name}</div>
+        <button
+          onClick={generate}
+          disabled={busy}
+          className="text-[11px] px-2 py-0.5 rounded bg-primary/30 hover:bg-primary/50 text-foreground flex items-center gap-1 transition-colors"
+        >
+          {busy ? <><Loader2 className="w-3 h-3 animate-spin" />生成中…</> : <><Sparkles className="w-3 h-3" />生成</>}
+        </button>
+      </div>
       <Handle type="source" position={Position.Right} id="source-process" />
     </div>
   );

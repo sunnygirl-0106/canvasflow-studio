@@ -1,14 +1,7 @@
 import { Handle, Position } from "@xyflow/react";
 import { Scissors, Play } from "lucide-react";
 import { useCanvas, type CanvasNode } from "@/store/canvasStore";
-
-const COLORS = {
-  border: "#56C7CF",
-  handle: "#14B8A6",
-  headerText: "#0F172A",
-  subtitleText: "#64748B",
-  btnBg: "linear-gradient(135deg, #0F766E 0%, #14B8A6 100%)",
-};
+import { NODE_COLORS as COLORS } from "./nodeTheme";
 
 export function CompositionNode({ id, data }: { id: string; data: CanvasNode["data"] }) {
   const openComposition = useCanvas((s) => s.openComposition);

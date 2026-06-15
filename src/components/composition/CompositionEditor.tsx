@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCanvas, compDuration } from "@/store/canvasStore";
 import { EditorTopBar } from "./EditorTopBar";
@@ -16,7 +16,7 @@ export function CompositionEditor() {
   const editorCompId = useCanvas((s) => s.editorCompId);
   const editorMode = useCanvas((s) => s.editorMode);
   const selectedClipId = useCanvas((s) => s.selectedClipId);
-  const nodes = useCanvas((s) => s.nodes);
+  const comp = useCanvas((s) => s.nodes.find((n) => n.id === s.editorCompId));
 
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -24,8 +24,6 @@ export function CompositionEditor() {
   const [speedOpen, setSpeedOpen] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [muted, setMuted] = useState(false);
-
-  const comp = nodes.find((n) => n.id === editorCompId);
   const tracks = comp?.data.tracks ?? [];
   // Step 2: render only the main video track (V1); multi-track wiring comes later.
   const v1 = tracks.find((t) => t.kind === "video");
@@ -79,6 +77,8 @@ export function CompositionEditor() {
     if (!selectedClipId) setSpeedOpen(false);
   }, [selectedClipId]);
 
+  const handleToggleMute = useCallback(() => setMuted((m) => !m), []);
+
   const handleTogglePlay = () => {
     if (!playing && currentTime >= totalDuration) setCurrentTime(0);
     setPlaying((p) => !p);
@@ -115,7 +115,7 @@ export function CompositionEditor() {
     <div
       className="fixed inset-0 z-40 flex flex-col"
       style={{
-        background: isFull ? "#0F172A" : "transparent",
+        background: isFull ? "#000000" : "transparent",
         pointerEvents: isFull ? "auto" : "none",
       }}
     >
@@ -145,19 +145,20 @@ export function CompositionEditor() {
         className="mt-auto flex flex-col"
         style={{
           pointerEvents: "auto",
-          background: "#111827",
-          borderTop: isFull ? "none" : "1px solid #334155",
-          boxShadow: isFull ? "none" : "0 -8px 24px rgba(0,0,0,0.3)",
+          background: isFull ? "#1E1E2E" : "#FFFFFF",
+          borderTop: isFull ? "none" : "1px solid #E2E8F0",
+          boxShadow: isFull ? "none" : "0 -8px 24px rgba(0,0,0,0.08)",
         }}
       >
         {/* Toolbar row */}
-        <div className="flex items-center justify-between" style={{ background: "#1E293B" }}>
+        <div className="flex items-center justify-between" style={{ background: isFull ? "#262637" : "#F1F5F9" }}>
           <div className="relative flex-shrink-0">
             <EditorToolbar
               compId={editorCompId}
               currentTime={currentTime}
               selectedClipId={selectedClipId}
               onOpenSpeed={() => setSpeedOpen((o) => !o)}
+              dark={isFull}
             />
             {speedOpen && selectedClipId && (
               <SpeedPanel
@@ -178,10 +179,11 @@ export function CompositionEditor() {
                 setCurrentTime(0);
                 setPlaying(true);
               }}
+              dark={isFull}
             />
           </div>
           <div className="flex-shrink-0">
-            <ZoomControls pxPerSec={pxPerSec} onZoom={setPxPerSec} />
+            <ZoomControls pxPerSec={pxPerSec} onZoom={setPxPerSec} dark={isFull} />
           </div>
         </div>
 
@@ -194,7 +196,8 @@ export function CompositionEditor() {
           selectedClipId={selectedClipId}
           onSeek={handleSeek}
           muted={muted}
-          onToggleMute={() => setMuted((m) => !m)}
+          onToggleMute={handleToggleMute}
+          dark={isFull}
         />
       </div>
     </div>

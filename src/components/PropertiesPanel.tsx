@@ -1,26 +1,31 @@
-import { useCanvas } from "@/store/canvasStore";
+import { useMemo } from "react";
+import { useCanvas, type Clip } from "@/store/canvasStore";
 import { X } from "lucide-react";
 
 export function PropertiesPanel() {
   const open = useCanvas((s) => s.panelOpen);
   const togglePanel = useCanvas((s) => s.togglePanel);
   const selectedId = useCanvas((s) => s.selectedId);
-  const selectedShotId = useCanvas((s) => s.selectedShotId);
+  const selectedClipId = useCanvas((s) => s.selectedClipId);
   const nodes = useCanvas((s) => s.nodes);
   const updateNode = useCanvas((s) => s.updateNode);
-  const updateShot = useCanvas((s) => s.updateShot);
+  const updateClip = useCanvas((s) => s.updateClip);
 
-  const node = nodes.find((n) => n.id === selectedId);
-  const shotEntry = (() => {
-    if (!selectedShotId) return null;
+  const node = useMemo(() => nodes.find((n) => n.id === selectedId), [nodes, selectedId]);
+
+  // Find selected clip across all composition tracks
+  const clipEntry = useMemo(() => {
+    if (!selectedClipId) return null;
     for (const n of nodes) {
-      const sh = n.data.shots?.find((s) => s.id === selectedShotId);
-      if (sh) return { tlId: n.id, shot: sh };
+      for (const t of n.data.tracks ?? []) {
+        const clip = t.clips.find((c: Clip) => c.id === selectedClipId);
+        if (clip) return { compId: n.id, clip };
+      }
     }
     return null;
-  })();
+  }, [nodes, selectedClipId]);
 
-  if (!open || (!node && !shotEntry)) return null;
+  if (!open || (!node && !clipEntry)) return null;
 
   return (
     <aside className="absolute top-12 right-0 bottom-0 w-72 frosted border-l border-border z-20 p-4 overflow-y-auto fade-in">
@@ -38,7 +43,7 @@ export function PropertiesPanel() {
           <Row label="名称">
             <input
               value={node.data.name ?? ""}
-              onChange={(e) => updateNode(node.id, { data: { ...node.data, name: e.target.value } } as any)}
+              onChange={(e) => updateNode(node.id, (n) => ({ ...n, data: { ...n.data, name: e.target.value } }))}
               className="w-full bg-secondary/60 rounded px-2 py-1 text-foreground"
             />
           </Row>
@@ -50,12 +55,12 @@ export function PropertiesPanel() {
         </div>
       )}
 
-      {shotEntry && (
+      {clipEntry && (
         <div className="space-y-3 text-xs">
           <Row label="名称">
             <input
-              value={shotEntry.shot.name}
-              onChange={(e) => updateShot(shotEntry.tlId, shotEntry.shot.id, { name: e.target.value })}
+              value={clipEntry.clip.name}
+              onChange={(e) => updateClip(clipEntry.compId, clipEntry.clip.id, { name: e.target.value })}
               className="w-full bg-secondary/60 rounded px-2 py-1"
             />
           </Row>
@@ -63,8 +68,8 @@ export function PropertiesPanel() {
             <input
               type="number"
               step="0.1"
-              value={shotEntry.shot.duration}
-              onChange={(e) => updateShot(shotEntry.tlId, shotEntry.shot.id, { duration: Number(e.target.value) })}
+              value={clipEntry.clip.duration}
+              onChange={(e) => updateClip(clipEntry.compId, clipEntry.clip.id, { duration: Number(e.target.value) })}
               className="w-full bg-secondary/60 rounded px-2 py-1"
             />
           </Row>
@@ -72,15 +77,15 @@ export function PropertiesPanel() {
             <input
               type="number"
               step="0.1"
-              value={shotEntry.shot.sourceIn}
-              onChange={(e) => updateShot(shotEntry.tlId, shotEntry.shot.id, { sourceIn: Number(e.target.value) })}
+              value={clipEntry.clip.sourceIn}
+              onChange={(e) => updateClip(clipEntry.compId, clipEntry.clip.id, { sourceIn: Number(e.target.value) })}
               className="w-full bg-secondary/60 rounded px-2 py-1"
             />
           </Row>
-          <Row label="状态"><span className="text-accent">{shotEntry.shot.status}</span></Row>
-          <Row label="绑定">{shotEntry.shot.bindings.join(", ") || "—"}</Row>
-          {shotEntry.shot.thumbnail && (
-            <img src={shotEntry.shot.thumbnail} alt="" className="w-full rounded-md border border-border" />
+          <Row label="状态"><span className="text-accent">{clipEntry.clip.status}</span></Row>
+          <Row label="绑定">{clipEntry.clip.bindings.join(", ") || "—"}</Row>
+          {clipEntry.clip.thumbnail && (
+            <img src={clipEntry.clip.thumbnail} alt="" className="w-full rounded-md border border-border" />
           )}
         </div>
       )}

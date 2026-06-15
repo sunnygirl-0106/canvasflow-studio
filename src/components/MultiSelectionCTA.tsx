@@ -3,7 +3,7 @@ import { Panel, useOnSelectionChange, type Node as RFNode } from "@xyflow/react"
 import { Film, Grid3X3, FolderOpen, ChevronDown, X } from "lucide-react";
 import { useCanvas, type NodeKind } from "@/store/canvasStore";
 
-const MEDIA_KINDS: NodeKind[] = ["image", "generateImage", "generateVideo"];
+const MEDIA_KINDS: NodeKind[] = ["image", "generateImage", "generateVideo", "audio"];
 
 /**
  * Floating CTA that appears when the user selects ≥2 media nodes on the canvas.

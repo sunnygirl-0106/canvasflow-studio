@@ -7,10 +7,14 @@ import {
   Ungroup,
   Download,
   ChevronDown,
+  LayoutGrid,
+  SquareDashedBottomCode,
+  ImageDown,
 } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 import { ColorMenu } from "./ColorMenu";
 import { LayoutMenu } from "./LayoutMenu";
+import { ExecuteGroupDialog } from "./ExecuteGroupDialog";
 
 const TOOLBAR_GAP = 12;
 
@@ -31,6 +35,7 @@ export function GroupToolbar() {
   useViewport();
 
   const [openMenu, setOpenMenu] = useState<"color" | "layout" | null>(null);
+  const [showExecuteDialog, setShowExecuteDialog] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,6 +57,8 @@ export function GroupToolbar() {
 
   const data = selectedGroup.data;
   const id = selectedGroup.id;
+  const members = data.members ?? [];
+  const isVideoGroup = members.length > 0 && members.every((m) => m.kind === "generateVideo");
   const color = data.groupColor ?? "#56C7CF";
   const layout = data.groupLayout ?? "grid";
   const nodeW = data.groupWidth ?? 300;
@@ -80,6 +87,90 @@ export function GroupToolbar() {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2000);
   };
+
+  if (isVideoGroup) {
+    return (
+      <>
+        <div
+          ref={toolbarRef}
+          className="absolute z-50 pointer-events-auto inline-flex items-center gap-1 rounded-full fade-in"
+          style={{
+            left,
+            top,
+            height: 44,
+            padding: "0 8px",
+            background: "#FFFFFF",
+            border: "1px solid #E5E7EB",
+            boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {/* Ratio toggle */}
+          <VToolbarBtn onClick={() => {}}>
+            <span
+              className="inline-block rounded-full"
+              style={{ width: 20, height: 20, background: "#CBD5E1" }}
+            />
+          </VToolbarBtn>
+
+          <Sep light />
+
+          {/* Grid */}
+          <VToolbarBtn onClick={() => {}}>
+            <LayoutGrid className="w-4 h-4" />
+          </VToolbarBtn>
+
+          <Sep light />
+
+          {/* Execute group — blue accent */}
+          <button
+            onClick={() => setShowExecuteDialog(true)}
+            className="inline-flex items-center gap-1.5 rounded-full h-8 px-3 text-[13px] font-semibold transition-colors"
+            style={{
+              color: "#38BDF8",
+              background: "transparent",
+              fontFamily: "PingFang SC, Inter, system-ui",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#F0F9FF";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            <Play className="w-3.5 h-3.5" style={{ color: "#38BDF8" }} />
+            整组执行
+          </button>
+
+          <Sep light />
+
+          {/* Ungroup */}
+          <VToolbarBtn onClick={() => ungroupGroup(id)}>
+            <SquareDashedBottomCode className="w-3.5 h-3.5" />
+            解组
+          </VToolbarBtn>
+
+          <Sep light />
+
+          {/* Batch download */}
+          <VToolbarBtn onClick={handleDownload}>
+            <ImageDown className="w-3.5 h-3.5" />
+            批量下载
+          </VToolbarBtn>
+        </div>
+
+        <ExecuteGroupDialog
+          open={showExecuteDialog}
+          members={members}
+          onConfirm={() => {
+            setShowExecuteDialog(false);
+            executeGroup(id);
+          }}
+          onCancel={() => setShowExecuteDialog(false)}
+        />
+      </>
+    );
+  }
 
   return (
     <div
@@ -126,7 +217,7 @@ export function GroupToolbar() {
       <Sep />
 
       {/* Execute */}
-      <ToolbarBtn onClick={() => executeGroup(id)}>
+      <ToolbarBtn onClick={() => setShowExecuteDialog(true)}>
         <Play className="w-3.5 h-3.5" />
         整组执行
       </ToolbarBtn>
@@ -154,10 +245,21 @@ export function GroupToolbar() {
         <Download className="w-3.5 h-3.5" />
         下载
       </ToolbarBtn>
+
+      <ExecuteGroupDialog
+        open={showExecuteDialog}
+        members={data.members ?? []}
+        onConfirm={() => {
+          setShowExecuteDialog(false);
+          executeGroup(id);
+        }}
+        onCancel={() => setShowExecuteDialog(false)}
+      />
     </div>
   );
 }
 
+/* Dark toolbar button (for normal groups) */
 function ToolbarBtn({
   children,
   onClick,
@@ -186,6 +288,40 @@ function ToolbarBtn({
   );
 }
 
-function Sep() {
-  return <span className="inline-block" style={{ width: 1, height: 18, background: "#475569" }} />;
+/* Light toolbar button (for video groups) */
+function VToolbarBtn({
+  children,
+  onClick,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded-full h-8 px-3 text-[13px] font-medium transition-colors"
+      style={{
+        color: "#334155",
+        background: "transparent",
+        fontFamily: "PingFang SC, Inter, system-ui",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "#F8FAFC";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Sep({ light }: { light?: boolean }) {
+  return (
+    <span
+      className="inline-block"
+      style={{ width: 1, height: 18, background: light ? "#E5E7EB" : "#475569" }}
+    />
+  );
 }

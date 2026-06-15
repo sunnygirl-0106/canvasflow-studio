@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "canvasflow",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "dev"],
+      "port": 8080
+    }
+  ]
+}

@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useReactFlow, useViewport } from "@xyflow/react";
-import { ChevronDown, Hash, Trash2, Ungroup, FolderOpen, Layers } from "lucide-react";
+import {
+  ChevronDown,
+  Hash,
+  Trash2,
+  Ungroup,
+  FolderOpen,
+  Layers,
+  RefreshCw,
+  PlaySquare,
+  Download,
+  LayoutGrid,
+} from "lucide-react";
 import { useCanvas, STORYBOARD_CELL_PX, STORYBOARD_GAP_PX } from "@/store/canvasStore";
 import { cellSize } from "@/lib/storyboard";
 import { RatioMenu } from "./RatioMenu";
@@ -25,6 +36,7 @@ export function StoryboardToolbar() {
   const convertStoryboardToGroup = useCanvas((s) => s.convertStoryboardToGroup);
   const ungroupStoryboard = useCanvas((s) => s.ungroupStoryboard);
   const stitchStoryboard = useCanvas((s) => s.stitchStoryboard);
+  const setBatchVideoSbId = useCanvas((s) => s.setBatchVideoSbId);
 
   const { flowToScreenPosition } = useReactFlow();
   // subscribe to viewport so position updates on pan/zoom
@@ -55,6 +67,7 @@ export function StoryboardToolbar() {
 
   const sb = selectedSb.data.storyboard;
   const id = selectedSb.id;
+  const isFromScript = !!selectedSb.data.scriptSourceId;
 
   // Calculate node width in canvas coords, then convert top-center to screen coords
   const { w: cw } = cellSize(sb.ratio, STORYBOARD_CELL_PX);
@@ -92,97 +105,171 @@ export function StoryboardToolbar() {
           whiteSpace: "nowrap",
         }}
       >
-        {/* Ratio */}
-        <div className="relative">
-          <ToolbarBtn
-            onClick={() => setOpenMenu(openMenu === "ratio" ? null : "ratio")}
-            active={openMenu === "ratio"}
-          >
-            {sb.ratio} <ChevronDown className="w-3 h-3" />
-          </ToolbarBtn>
-          {openMenu === "ratio" && (
-            <RatioMenu
-              current={sb.ratio}
-              onSelect={(r) => setStoryboardRatio(id, r)}
-              onClose={() => setOpenMenu(null)}
-            />
-          )}
-        </div>
+        {isFromScript ? (
+          <>
+            {/* Ratio toggle (visual only) */}
+            <ToolbarBtn
+              onClick={() => setOpenMenu(openMenu === "ratio" ? null : "ratio")}
+              active={openMenu === "ratio"}
+            >
+              <span
+                className="inline-block rounded-full"
+                style={{ width: 20, height: 20, background: "#CBD5E1" }}
+              />
+            </ToolbarBtn>
+            {openMenu === "ratio" && (
+              <RatioMenu
+                current={sb.ratio}
+                onSelect={(r) => setStoryboardRatio(id, r)}
+                onClose={() => setOpenMenu(null)}
+              />
+            )}
 
-        <Sep />
+            <Sep />
 
-        {/* Grid size */}
-        <div className="relative">
-          <ToolbarBtn
-            onClick={() => setOpenMenu(openMenu === "grid" ? null : "grid")}
-            active={openMenu === "grid"}
-          >
-            宫格 {sb.rows}x{sb.cols} <ChevronDown className="w-3 h-3" />
-          </ToolbarBtn>
-          {openMenu === "grid" && (
-            <GridSizeMenu
-              currentRows={sb.rows}
-              currentCols={sb.cols}
-              onSelect={(r, c) => setStoryboardGrid(id, r, c)}
-              onClose={() => setOpenMenu(null)}
-            />
-          )}
-        </div>
+            {/* Grid layout */}
+            <ToolbarBtn
+              onClick={() => setOpenMenu(openMenu === "grid" ? null : "grid")}
+              active={openMenu === "grid"}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </ToolbarBtn>
+            {openMenu === "grid" && (
+              <GridSizeMenu
+                currentRows={sb.rows}
+                currentCols={sb.cols}
+                onSelect={(r, c) => setStoryboardGrid(id, r, c)}
+                onClose={() => setOpenMenu(null)}
+              />
+            )}
 
-        <Sep />
+            <Sep />
 
-        {/* Stitch */}
-        <div className="relative">
-          <ToolbarBtn
-            onClick={() => setOpenMenu(openMenu === "stitch" ? null : "stitch")}
-            active={openMenu === "stitch"}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            拼接 <ChevronDown className="w-3 h-3" />
-          </ToolbarBtn>
-          {openMenu === "stitch" && (
-            <StitchMenu
-              onSelect={(res) => stitchStoryboard(id, res)}
-              onClose={() => setOpenMenu(null)}
-            />
-          )}
-        </div>
+            {/* Regenerate */}
+            <ToolbarBtn onClick={() => alert("重新生成（即将上线）")}>
+              <RefreshCw className="w-3.5 h-3.5" />
+              重新生成
+            </ToolbarBtn>
 
-        <Sep />
+            <Sep />
 
-        {/* Toggle index */}
-        <ToolbarBtn
-          onClick={() => toggleStoryboardIndex(id)}
-          active={sb.showIndex}
-          title="序号角标"
-        >
-          <Hash className="w-3.5 h-3.5" />
-          序号
-        </ToolbarBtn>
+            {/* Batch generate video */}
+            <ToolbarBtn onClick={() => setBatchVideoSbId(id)}>
+              <PlaySquare className="w-3.5 h-3.5" />
+              批量生成视频
+            </ToolbarBtn>
 
-        <Sep />
+            <Sep />
 
-        {/* Clear */}
-        <ToolbarBtn onClick={() => setConfirmAction("clear")} title="清空分镜组">
-          <Trash2 className="w-3.5 h-3.5" />
-          清空
-        </ToolbarBtn>
+            {/* Ungroup */}
+            <ToolbarBtn onClick={() => ungroupStoryboard(id)}>
+              <Ungroup className="w-3.5 h-3.5" />
+              解组
+            </ToolbarBtn>
 
-        <Sep />
+            <Sep />
 
-        {/* Convert to group */}
-        <ToolbarBtn onClick={() => convertStoryboardToGroup(id)} title="转普通组">
-          <FolderOpen className="w-3.5 h-3.5" />
-          转普通组
-        </ToolbarBtn>
+            {/* Batch download */}
+            <ToolbarBtn onClick={() => alert("批量下载（即将上线）")}>
+              <Download className="w-3.5 h-3.5" />
+              批量下载
+            </ToolbarBtn>
+          </>
+        ) : (
+          <>
+            {/* Ratio */}
+            <div className="relative">
+              <ToolbarBtn
+                onClick={() => setOpenMenu(openMenu === "ratio" ? null : "ratio")}
+                active={openMenu === "ratio"}
+              >
+                {sb.ratio} <ChevronDown className="w-3 h-3" />
+              </ToolbarBtn>
+              {openMenu === "ratio" && (
+                <RatioMenu
+                  current={sb.ratio}
+                  onSelect={(r) => setStoryboardRatio(id, r)}
+                  onClose={() => setOpenMenu(null)}
+                />
+              )}
+            </div>
 
-        <Sep />
+            <Sep />
 
-        {/* Ungroup */}
-        <ToolbarBtn onClick={() => ungroupStoryboard(id)} title="解组">
-          <Ungroup className="w-3.5 h-3.5" />
-          解组
-        </ToolbarBtn>
+            {/* Grid size */}
+            <div className="relative">
+              <ToolbarBtn
+                onClick={() => setOpenMenu(openMenu === "grid" ? null : "grid")}
+                active={openMenu === "grid"}
+              >
+                宫格 {sb.rows}x{sb.cols} <ChevronDown className="w-3 h-3" />
+              </ToolbarBtn>
+              {openMenu === "grid" && (
+                <GridSizeMenu
+                  currentRows={sb.rows}
+                  currentCols={sb.cols}
+                  onSelect={(r, c) => setStoryboardGrid(id, r, c)}
+                  onClose={() => setOpenMenu(null)}
+                />
+              )}
+            </div>
+
+            <Sep />
+
+            {/* Stitch */}
+            <div className="relative">
+              <ToolbarBtn
+                onClick={() => setOpenMenu(openMenu === "stitch" ? null : "stitch")}
+                active={openMenu === "stitch"}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                拼接 <ChevronDown className="w-3 h-3" />
+              </ToolbarBtn>
+              {openMenu === "stitch" && (
+                <StitchMenu
+                  onSelect={(res) => stitchStoryboard(id, res)}
+                  onClose={() => setOpenMenu(null)}
+                />
+              )}
+            </div>
+
+            <Sep />
+
+            {/* Toggle index */}
+            <ToolbarBtn
+              onClick={() => toggleStoryboardIndex(id)}
+              active={sb.showIndex}
+              title="序号角标"
+            >
+              <Hash className="w-3.5 h-3.5" />
+              序号
+            </ToolbarBtn>
+
+            <Sep />
+
+            {/* Clear */}
+            <ToolbarBtn onClick={() => setConfirmAction("clear")} title="清空分镜组">
+              <Trash2 className="w-3.5 h-3.5" />
+              清空
+            </ToolbarBtn>
+
+            <Sep />
+
+            {/* Convert to group */}
+            <ToolbarBtn onClick={() => convertStoryboardToGroup(id)} title="转普通组">
+              <FolderOpen className="w-3.5 h-3.5" />
+              转普通组
+            </ToolbarBtn>
+
+            <Sep />
+
+            {/* Ungroup */}
+            <ToolbarBtn onClick={() => ungroupStoryboard(id)} title="解组">
+              <Ungroup className="w-3.5 h-3.5" />
+              解组
+            </ToolbarBtn>
+          </>
+        )}
       </div>
 
       {/* Confirm dialog for clear */}
