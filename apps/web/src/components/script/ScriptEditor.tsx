@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
+import { useEscape } from "@/lib/useDismiss";
 import type { WizardStep } from "@/store/types";
 import { WizardStepper } from "./WizardStepper";
 import { ConfirmShotsStep } from "./ConfirmShotsStep";
@@ -16,14 +17,7 @@ export function ScriptEditor() {
 
   const [hintVisible, setHintVisible] = useState(true);
 
-  useEffect(() => {
-    if (!editorScriptId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeScript();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [editorScriptId, closeScript]);
+  useEscape(closeScript, !!editorScriptId);
 
   if (!editorScriptId || !node || node.kind !== "script") return null;
 

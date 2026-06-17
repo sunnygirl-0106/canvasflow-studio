@@ -1,31 +1,15 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import crypto from "node:crypto";
-import path from "node:path";
+// ── Demo storage (mock-only) ─────────────────────────────────────────────────
+//
+// This is a demo repo: there is no real object storage. The API always runs in
+// mock mode — `storageConfigured` is false, so `routes/assets.ts` returns a
+// mock upload response and files stay as local blob URLs in the browser.
+//
+// `validateAsset` is kept as a real, useful helper (type/size whitelist).
+// `createPresignedUpload` remains as a stub for the (unused) configured path,
+// so a future real-storage implementation has an obvious place to land.
 
-// ── Configuration ────────────────────────────────────────────────────────────
-
-const S3_ENDPOINT = process.env.S3_ENDPOINT ?? "";
-const S3_REGION = process.env.S3_REGION ?? "auto";
-const S3_BUCKET = process.env.S3_BUCKET ?? "";
-const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID ?? "";
-const S3_SECRET_ACCESS_KEY = process.env.S3_SECRET_ACCESS_KEY ?? "";
-const S3_PUBLIC_BASE_URL = process.env.S3_PUBLIC_BASE_URL ?? "";
-
-export const storageConfigured =
-  S3_ENDPOINT !== "" && S3_BUCKET !== "" && S3_ACCESS_KEY_ID !== "";
-
-const s3 = storageConfigured
-  ? new S3Client({
-      endpoint: S3_ENDPOINT,
-      region: S3_REGION,
-      credentials: {
-        accessKeyId: S3_ACCESS_KEY_ID,
-        secretAccessKey: S3_SECRET_ACCESS_KEY,
-      },
-      forcePathStyle: true,
-    })
-  : null;
+// Always false in the demo. Kept as a named export so callers branch on it.
+export const storageConfigured = false;
 
 // ── Content-type whitelist ───────────────────────────────────────────────────
 
@@ -43,7 +27,6 @@ const ALLOWED_VIDEO_TYPES = new Set([
 
 const IMAGE_MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 const VIDEO_MAX_SIZE = 500 * 1024 * 1024; // 500 MB
-const PRESIGN_EXPIRES_IN = 300; // 5 minutes
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -72,44 +55,12 @@ export function validateAsset(
   return null;
 }
 
+// Unreachable in the demo (storageConfigured is always false). Left as a stub
+// so a real object-storage implementation has a clear home.
 export async function createPresignedUpload(
-  projectId: string,
-  filename: string,
-  contentType: string,
+  _projectId: string,
+  _filename: string,
+  _contentType: string,
 ): Promise<PresignResult> {
-  if (!s3) {
-    throw new Error("Object storage is not configured");
-  }
-
-  const ext = path.extname(filename) || mimeToExt(contentType);
-  const key = `projects/${projectId}/${crypto.randomUUID()}${ext}`;
-
-  const command = new PutObjectCommand({
-    Bucket: S3_BUCKET,
-    Key: key,
-    ContentType: contentType,
-  });
-
-  const uploadUrl = await getSignedUrl(s3, command, {
-    expiresIn: PRESIGN_EXPIRES_IN,
-  });
-
-  const publicUrl = S3_PUBLIC_BASE_URL
-    ? `${S3_PUBLIC_BASE_URL.replace(/\/$/, "")}/${key}`
-    : uploadUrl.split("?")[0];
-
-  return { uploadUrl, publicUrl, key };
-}
-
-function mimeToExt(mime: string): string {
-  const map: Record<string, string> = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-    "video/mp4": ".mp4",
-    "video/webm": ".webm",
-    "video/quicktime": ".mov",
-  };
-  return map[mime] ?? "";
+  throw new Error("Object storage is not configured (demo runs in mock mode)");
 }

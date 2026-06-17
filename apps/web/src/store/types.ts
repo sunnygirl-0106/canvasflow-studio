@@ -33,6 +33,7 @@ export interface StoreState {
   panelOpen: boolean;
   exportOpen: false | "fcpxml" | "edl";
   contextMenu: ContextMenuState | null;
+  addPanel: { open: boolean; x?: number; y?: number };
   past: Snapshot[];
   future: Snapshot[];
   editorCompId: string | null;
@@ -51,7 +52,8 @@ export interface StoreState {
   setNodes: (n: CanvasNode[]) => void;
   updateNode: (id: string, patch: Partial<CanvasNode> | ((n: CanvasNode) => CanvasNode)) => void;
   batchUpdatePositions: (updates: Record<string, { x: number; y: number }>) => void;
-  addNode: (kind: NodeKind) => void;
+  addNode: (kind: NodeKind) => string;
+  addNodeAtPosition: (kind: NodeKind, x: number, y: number) => string;
   removeNode: (id: string) => void;
   addEdge: (from: string, to: string, sourceHandle?: string, toHandle?: string) => void;
   removeEdge: (id: string) => void;
@@ -59,6 +61,7 @@ export interface StoreState {
   togglePanel: (open?: boolean) => void;
   setExport: (v: StoreState["exportOpen"]) => void;
   setContextMenu: (m: ContextMenuState | null) => void;
+  setAddPanel: (panel: { open: boolean; x?: number; y?: number }) => void;
 
   mergeToComposition: (nodeIds: string[]) => string | null;
   addToComposition: (nodeId: string) => string | null;
@@ -70,6 +73,7 @@ export interface StoreState {
   addAudioTrack: (compId: string) => void;
   removeTrack: (compId: string, trackId: string) => void;
   updateClip: (compId: string, clipId: string, patch: Partial<Clip>) => void;
+  resizeClipRight: (compId: string, clipId: string, newDuration: number) => void;
   removeClip: (compId: string, clipId: string) => void;
   moveClip: (compId: string, clipId: string, toTrackId: string, toStartSec: number) => void;
   reorderVideoTrack: (compId: string, trackId: string, clipIds: string[]) => void;

@@ -60,6 +60,7 @@ export function TrackTimeline({
   dark,
 }: Props) {
   const updateClip = useCanvas((s) => s.updateClip);
+  const resizeClipRight = useCanvas((s) => s.resizeClipRight);
   const moveClip = useCanvas((s) => s.moveClip);
   const addVideoTrack = useCanvas((s) => s.addVideoTrack);
   const addAudioTrack = useCanvas((s) => s.addAudioTrack);
@@ -271,7 +272,11 @@ export function TrackTimeline({
           edge === "right"
             ? Math.max(MIN_DURATION_SEC, startDuration + deltaSec)
             : Math.max(MIN_DURATION_SEC, startDuration - deltaSec);
-        updateClip(compId, clip.id, { duration: round1(newDuration) });
+        if (edge === "right") {
+          resizeClipRight(compId, clip.id, round1(newDuration));
+        } else {
+          updateClip(compId, clip.id, { duration: round1(newDuration) });
+        }
       };
       const up = () => {
         setResizingClipId(null);
@@ -281,7 +286,7 @@ export function TrackTimeline({
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
     },
-    [compId, pxPerSec, updateClip, pushHistory],
+    [compId, pxPerSec, updateClip, resizeClipRight, pushHistory],
   );
 
   /* ── Clip drag (2D: cross-track + auto-create V2) ───────── */

@@ -186,7 +186,7 @@ export function PreviewStage({ tracks, currentTime, playing, onTogglePlay }: Pro
         ref={canvasRef}
         className="relative"
         style={{
-          width: "100%",
+          width: "auto",
           height: "100%",
           maxWidth: "100%",
           maxHeight: "100%",

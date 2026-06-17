@@ -1,152 +1,218 @@
-import { Handle, Position, NodeToolbar } from "@xyflow/react";
-import { useState } from "react";
-import { Video, Upload, Loader2, Play } from "lucide-react";
+import { Handle, Position } from "@xyflow/react";
+import { memo, useRef, useState } from "react";
+import { Video, Upload, Play, Eye, Loader2 } from "lucide-react";
 import { useCanvas, type GenerateVideoNodeData, type CanvasNode } from "@/store/canvasStore";
 import { VideoPromptPanel } from "@/components/VideoPromptPanel";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
 
-export function GenerateVideoNode({ id, data }: { id: string; data: GenerateVideoNodeData }) {
+const WIDTH = 480;
+const BODY_HEIGHT = 280;
+
+export const GenerateVideoNode = memo(GenerateVideoNodeImpl);
+
+function GenerateVideoNodeImpl({
+  id,
+  data,
+  selected,
+}: {
+  id: string;
+  data: GenerateVideoNodeData;
+  selected?: boolean;
+}) {
   const updateNode = useCanvas((s) => s.updateNode);
-  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [hover, setHover] = useState(false);
+  const status = data.status ?? (data.src ? "ready" : "empty");
+  const progress = data.progress ?? 0;
 
-  const generate = () => {
-    setBusy(true);
-    setTimeout(() => {
-      const seed = Math.random().toString(36).slice(2, 7);
-      updateNode(
-        id,
-        (n) =>
-          ({
-            ...n,
-            data: { ...n.data, src: `https://picsum.photos/seed/${seed}/640/360`, duration: 8 },
-          }) as CanvasNode,
-      );
-      setBusy(false);
-    }, 1200);
+  const onUploadClick = () => fileRef.current?.click();
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    updateNode(id, (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode);
+    e.target.value = "";
   };
-
-  const hasSrc = !!data.src;
 
   return (
     <div
-      className="fade-in group relative rounded-3xl overflow-visible"
-      style={{
-        width: 560,
-        background: "#FFFFFF",
-        border: `2px solid ${COLORS.border}`,
-        boxShadow: "0 18px 36px rgba(152,162,179,0.10)",
-      }}
+      className="fade-in relative"
+      style={{ width: WIDTH }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      {/* Input handle — left, teal */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="in"
-        style={{ background: COLORS.handle }}
-      />
+      <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={onFile} />
 
-      {/* Header */}
-      <div className="flex items-center justify-between" style={{ padding: "16px 20px" }}>
-        <div className="flex items-center gap-2">
-          <Video
-            className="w-[18px] h-[18px]"
-            style={{ color: COLORS.headerText }}
-            strokeWidth={1.8}
-          />
+      {/* Header row */}
+      <div className="flex items-center justify-between" style={{ padding: "0 4px 8px 4px" }}>
+        <div className="flex items-center gap-1.5">
+          <Video className="w-[15px] h-[15px]" style={{ color: "#9CA3AF" }} strokeWidth={1.8} />
           <span
-            className="text-[15px] font-semibold"
-            style={{ color: COLORS.headerText, fontFamily: "PingFang SC, Inter, system-ui" }}
+            className="text-[14px] font-semibold"
+            style={{ color: "#E5E7EB", fontFamily: "PingFang SC, Inter, system-ui" }}
           >
-            {data.name ?? "video 节点"}
+            {data.name ?? "视频"}
           </span>
         </div>
         <button
-          className="flex items-center justify-center rounded-lg hover:bg-slate-100"
-          style={{ width: 32, height: 32 }}
-          onClick={generate}
-          disabled={busy}
-          title="上传 / 生成"
+          onClick={onUploadClick}
+          className="flex items-center justify-center rounded-md transition-colors"
+          style={{
+            width: 28,
+            height: 28,
+            background: "#2A2D33",
+            border: "1px solid #3F4248",
+          }}
+          title="上传视频"
         >
-          {busy ? (
-            <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#64748B" }} />
-          ) : (
-            <Upload className="w-4 h-4" style={{ color: "#64748B" }} strokeWidth={1.8} />
-          )}
+          <Upload className="w-3.5 h-3.5" style={{ color: "#E5E7EB" }} strokeWidth={1.8} />
         </button>
       </div>
 
-      {/* Body — dropzone or video */}
-      <div style={{ padding: "0 20px 20px 20px" }}>
-        {hasSrc ? (
-          <div
-            className="relative rounded-2xl overflow-hidden"
-            style={{ height: 220, background: "#0F172A" }}
-          >
-            <img src={data.src!} alt="" className="w-full h-full object-cover" draggable={false} />
-            {hover && (
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
-                  <Play className="w-6 h-6 text-black ml-0.5" />
+      {/* Body — overflow visible so the handle plus icons aren't clipped.
+          The inner div re-applies the rounded clipping for the image. */}
+      <div
+        className="relative rounded-2xl"
+        style={{
+          width: WIDTH,
+          height: BODY_HEIGHT,
+          background: "#1F2125",
+          border: status === "generating" ? `1.5px dashed ${COLORS.border}` : "1px solid #2A2D33",
+        }}
+      >
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="in"
+          style={{ background: COLORS.handle }}
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="source-process"
+          style={{ background: COLORS.handle }}
+        />
+
+        <div className="absolute inset-0 rounded-2xl overflow-hidden">
+          {status === "empty" && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div
+                className="flex items-center justify-center rounded-xl"
+                style={{
+                  width: 76,
+                  height: 76,
+                  background: "#15171A",
+                  border: "1px solid #2A2D33",
+                }}
+              >
+                <Video className="w-9 h-9" style={{ color: "#56C7CF" }} strokeWidth={1.4} />
+              </div>
+            </div>
+          )}
+
+          {status === "generating" && (
+            <div
+              className="absolute"
+              style={{
+                left: 24,
+                right: 24,
+                top: "50%",
+                transform: "translateY(-50%)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 14,
+                fontFamily: "PingFang SC, Inter, system-ui",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex items-center justify-center rounded-lg"
+                  style={{ width: 36, height: 36, background: "#2A2D33" }}
+                >
+                  <Loader2
+                    className="w-4 h-4 animate-spin"
+                    style={{ color: "#9CA3AF" }}
+                    strokeWidth={2}
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[14px] font-semibold" style={{ color: "#E5E7EB" }}>
+                    生成中
+                  </span>
+                  <span className="text-[12px]" style={{ color: "#9CA3AF" }}>
+                    正在处理任务
+                  </span>
                 </div>
               </div>
-            )}
-          </div>
-        ) : (
-          <button
-            onClick={generate}
-            disabled={busy}
-            className="w-full rounded-2xl flex flex-col items-center justify-center transition-colors"
-            style={{
-              height: 220,
-              background: COLORS.dropBg,
-              border: `2px dashed ${COLORS.dropBorder}`,
-              gap: 12,
-            }}
-            onMouseEnter={(e) => {
-              if (busy) return;
-              e.currentTarget.style.background = "#F8FAFC";
-            }}
-            onMouseLeave={(e) => {
-              if (busy) return;
-              e.currentTarget.style.background = COLORS.dropBg;
-            }}
-          >
-            {busy ? (
-              <Loader2 className="w-7 h-7 animate-spin" style={{ color: COLORS.dropIcon }} />
-            ) : (
-              <Upload className="w-7 h-7" style={{ color: COLORS.dropIcon }} strokeWidth={1.6} />
-            )}
-            <span
-              className="text-[14px] font-medium"
-              style={{ color: COLORS.dropTextPrimary, fontFamily: "PingFang SC, Inter, system-ui" }}
-            >
-              {busy ? "上传中…" : "点击或拖拽上传视频"}
-            </span>
-            <span
-              className="text-[12px]"
-              style={{ color: COLORS.dropTextMuted, fontFamily: "PingFang SC, Inter, system-ui" }}
-            >
-              MP4 / WebM / MOV，最大 100MB
-            </span>
-          </button>
-        )}
+              <div
+                className="rounded-full"
+                style={{ height: 4, background: "#2A2D33", overflow: "hidden" }}
+              >
+                <div
+                  style={{
+                    width: `${Math.round(progress * 100)}%`,
+                    height: "100%",
+                    background: "linear-gradient(90deg, #56C7CF, #14B8A6)",
+                    transition: "width 120ms linear",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {status === "ready" && data.src && (
+            <>
+              <img src={data.src} alt="" className="w-full h-full object-cover" draggable={false} />
+              {hover && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+                  <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+                    <Play className="w-6 h-6 text-black ml-0.5" />
+                  </div>
+                </div>
+              )}
+              <div
+                className="absolute"
+                style={{
+                  right: 10,
+                  bottom: 10,
+                  padding: "4px 10px",
+                  background: "rgba(15,17,20,0.78)",
+                  borderRadius: 999,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  color: "#E5E7EB",
+                  fontSize: 12,
+                  fontFamily: "PingFang SC, Inter, system-ui",
+                }}
+              >
+                <Eye className="w-3.5 h-3.5" strokeWidth={1.8} />
+                预览
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Output handle — right, teal */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="source-process"
-        style={{ background: COLORS.handle }}
-      />
-
-      {/* Generation prompt panel — auto-shows when this node is selected */}
-      <NodeToolbar position={Position.Bottom} offset={16}>
-        <VideoPromptPanel nodeName={data.name ?? "video 节点"} />
-      </NodeToolbar>
+      {/* Prompt panel below (whenever selected).
+          Rendered inline so it inherits the viewport zoom transform, instead
+          of NodeToolbar which positions in screen-space and stays a fixed
+          size as the user zooms. */}
+      {selected && (
+        <div
+          className="nodrag nowheel"
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: 18,
+            zIndex: 10,
+          }}
+        >
+          <VideoPromptPanel nodeId={id} />
+        </div>
+      )}
     </div>
   );
 }

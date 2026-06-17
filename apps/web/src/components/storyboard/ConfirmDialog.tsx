@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Modal } from "@/components/ui/Modal";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -17,27 +17,9 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onCancel]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.3)" }}
-      onClick={onCancel}
-    >
+    <Modal open={open} onClose={onCancel}>
       <div
-        ref={dialogRef}
         className="rounded-xl"
         style={{
           width: 360,
@@ -45,7 +27,6 @@ export function ConfirmDialog({
           boxShadow: "0 20px 60px rgba(15,23,42,0.18)",
           padding: "24px",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         <h3
           className="text-[15px] font-semibold mb-2"
@@ -83,6 +64,6 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

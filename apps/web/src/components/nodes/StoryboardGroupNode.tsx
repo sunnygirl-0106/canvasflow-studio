@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { Grid3X3, ChevronDown, ArrowUp, Loader2, Sparkles, Clapperboard } from "lucide-react";
 import type { StoryboardNodeData, StoryboardCell } from "@/store/canvasStore";
@@ -6,7 +6,9 @@ import { STORYBOARD_CELL_PX, STORYBOARD_GAP_PX, useCanvas } from "@/store/canvas
 import { cellSize, cellLabel } from "@/lib/storyboard";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
 
-export function StoryboardGroupNode({ id, data }: { id: string; data: StoryboardNodeData }) {
+export const StoryboardGroupNode = memo(StoryboardGroupNodeImpl);
+
+function StoryboardGroupNodeImpl({ id, data }: { id: string; data: StoryboardNodeData }) {
   const sb = data.storyboard;
   const reorderCells = useCanvas((s) => s.reorderStoryboardCells);
   const batchVideoSbId = useCanvas((s) => s.batchVideoSbId);
@@ -295,7 +297,6 @@ function CellSlot({
       onDragOver={(e) => onDragOver(e, idx)}
       onDrop={(e) => onDrop(e, idx)}
       onDragEnd={onDragEnd}
-      onDragLeave={() => {}}
     >
       {cell.src ? (
         <img

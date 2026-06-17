@@ -18,16 +18,20 @@ import { RatioMenu } from "./RatioMenu";
 import { GridSizeMenu } from "./GridSizeMenu";
 import { StitchMenu } from "./StitchMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ToolbarButton, ToolbarSep } from "@/components/ui/ToolbarButton";
 
 const TOOLBAR_GAP = 12;
 
 export function StoryboardToolbar() {
-  // Read selectedId + nodes directly from store — immediate on any click
+  // Read selectedId directly — immediate on any click.
   const selectedId = useCanvas((s) => s.selectedId);
-  const nodes = useCanvas((s) => s.nodes);
-  const selectedSb = selectedId
-    ? (nodes.find((n) => n.id === selectedId && n.kind === "storyboard") ?? null)
-    : null;
+  // Narrow selector: re-render only when the *selected storyboard node* changes,
+  // not on every unrelated node move/add (subscribing to the whole array did).
+  const selectedSb = useCanvas((s) =>
+    s.selectedId
+      ? (s.nodes.find((n) => n.id === s.selectedId && n.kind === "storyboard") ?? null)
+      : null,
+  );
 
   const setStoryboardRatio = useCanvas((s) => s.setStoryboardRatio);
   const setStoryboardGrid = useCanvas((s) => s.setStoryboardGrid);
@@ -108,7 +112,8 @@ export function StoryboardToolbar() {
         {isFromScript ? (
           <>
             {/* Ratio toggle (visual only) */}
-            <ToolbarBtn
+            <ToolbarButton
+              variant="light"
               onClick={() => setOpenMenu(openMenu === "ratio" ? null : "ratio")}
               active={openMenu === "ratio"}
             >
@@ -116,7 +121,7 @@ export function StoryboardToolbar() {
                 className="inline-block rounded-full"
                 style={{ width: 20, height: 20, background: "#CBD5E1" }}
               />
-            </ToolbarBtn>
+            </ToolbarButton>
             {openMenu === "ratio" && (
               <RatioMenu
                 current={sb.ratio}
@@ -125,15 +130,16 @@ export function StoryboardToolbar() {
               />
             )}
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Grid layout */}
-            <ToolbarBtn
+            <ToolbarButton
+              variant="light"
               onClick={() => setOpenMenu(openMenu === "grid" ? null : "grid")}
               active={openMenu === "grid"}
             >
               <LayoutGrid className="w-4 h-4" />
-            </ToolbarBtn>
+            </ToolbarButton>
             {openMenu === "grid" && (
               <GridSizeMenu
                 currentRows={sb.rows}
@@ -143,48 +149,49 @@ export function StoryboardToolbar() {
               />
             )}
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Regenerate */}
-            <ToolbarBtn onClick={() => alert("重新生成（即将上线）")}>
+            <ToolbarButton variant="light" onClick={() => alert("重新生成（即将上线）")}>
               <RefreshCw className="w-3.5 h-3.5" />
               重新生成
-            </ToolbarBtn>
+            </ToolbarButton>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Batch generate video */}
-            <ToolbarBtn onClick={() => setBatchVideoSbId(id)}>
+            <ToolbarButton variant="light" onClick={() => setBatchVideoSbId(id)}>
               <PlaySquare className="w-3.5 h-3.5" />
               批量生成视频
-            </ToolbarBtn>
+            </ToolbarButton>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Ungroup */}
-            <ToolbarBtn onClick={() => ungroupStoryboard(id)}>
+            <ToolbarButton variant="light" onClick={() => ungroupStoryboard(id)}>
               <Ungroup className="w-3.5 h-3.5" />
               解组
-            </ToolbarBtn>
+            </ToolbarButton>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Batch download */}
-            <ToolbarBtn onClick={() => alert("批量下载（即将上线）")}>
+            <ToolbarButton variant="light" onClick={() => alert("批量下载（即将上线）")}>
               <Download className="w-3.5 h-3.5" />
               批量下载
-            </ToolbarBtn>
+            </ToolbarButton>
           </>
         ) : (
           <>
             {/* Ratio */}
             <div className="relative">
-              <ToolbarBtn
+              <ToolbarButton
+                variant="light"
                 onClick={() => setOpenMenu(openMenu === "ratio" ? null : "ratio")}
                 active={openMenu === "ratio"}
               >
                 {sb.ratio} <ChevronDown className="w-3 h-3" />
-              </ToolbarBtn>
+              </ToolbarButton>
               {openMenu === "ratio" && (
                 <RatioMenu
                   current={sb.ratio}
@@ -194,16 +201,17 @@ export function StoryboardToolbar() {
               )}
             </div>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Grid size */}
             <div className="relative">
-              <ToolbarBtn
+              <ToolbarButton
+                variant="light"
                 onClick={() => setOpenMenu(openMenu === "grid" ? null : "grid")}
                 active={openMenu === "grid"}
               >
                 宫格 {sb.rows}x{sb.cols} <ChevronDown className="w-3 h-3" />
-              </ToolbarBtn>
+              </ToolbarButton>
               {openMenu === "grid" && (
                 <GridSizeMenu
                   currentRows={sb.rows}
@@ -214,17 +222,18 @@ export function StoryboardToolbar() {
               )}
             </div>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Stitch */}
             <div className="relative">
-              <ToolbarBtn
+              <ToolbarButton
+                variant="light"
                 onClick={() => setOpenMenu(openMenu === "stitch" ? null : "stitch")}
                 active={openMenu === "stitch"}
               >
                 <Layers className="w-3.5 h-3.5" />
                 拼接 <ChevronDown className="w-3 h-3" />
-              </ToolbarBtn>
+              </ToolbarButton>
               {openMenu === "stitch" && (
                 <StitchMenu
                   onSelect={(res) => stitchStoryboard(id, res)}
@@ -233,41 +242,50 @@ export function StoryboardToolbar() {
               )}
             </div>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Toggle index */}
-            <ToolbarBtn
+            <ToolbarButton
+              variant="light"
               onClick={() => toggleStoryboardIndex(id)}
               active={sb.showIndex}
               title="序号角标"
             >
               <Hash className="w-3.5 h-3.5" />
               序号
-            </ToolbarBtn>
+            </ToolbarButton>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Clear */}
-            <ToolbarBtn onClick={() => setConfirmAction("clear")} title="清空分镜组">
+            <ToolbarButton
+              variant="light"
+              onClick={() => setConfirmAction("clear")}
+              title="清空分镜组"
+            >
               <Trash2 className="w-3.5 h-3.5" />
               清空
-            </ToolbarBtn>
+            </ToolbarButton>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Convert to group */}
-            <ToolbarBtn onClick={() => convertStoryboardToGroup(id)} title="转普通组">
+            <ToolbarButton
+              variant="light"
+              onClick={() => convertStoryboardToGroup(id)}
+              title="转普通组"
+            >
               <FolderOpen className="w-3.5 h-3.5" />
               转普通组
-            </ToolbarBtn>
+            </ToolbarButton>
 
-            <Sep />
+            <ToolbarSep light />
 
             {/* Ungroup */}
-            <ToolbarBtn onClick={() => ungroupStoryboard(id)} title="解组">
+            <ToolbarButton variant="light" onClick={() => ungroupStoryboard(id)} title="解组">
               <Ungroup className="w-3.5 h-3.5" />
               解组
-            </ToolbarBtn>
+            </ToolbarButton>
           </>
         )}
       </div>
@@ -286,41 +304,4 @@ export function StoryboardToolbar() {
       />
     </>
   );
-}
-
-function ToolbarBtn({
-  children,
-  onClick,
-  active,
-  title,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  active?: boolean;
-  title?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="inline-flex items-center gap-1 rounded-full h-8 px-3 text-[13px] font-medium transition-colors"
-      style={{
-        color: active ? "#0F766E" : "#334155",
-        background: active ? "#F0FDFA" : "transparent",
-        fontFamily: "PingFang SC, Inter, system-ui",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.background = "#F8FAFC";
-      }}
-      onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.background = "transparent";
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Sep() {
-  return <span className="inline-block" style={{ width: 1, height: 18, background: "#E5E7EB" }} />;
 }

@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import { Play, Pause, X } from "lucide-react";
 import { clipAt, type Track } from "@/store/canvasStore";
 import { CLIP_STYLES } from "@/lib/clipStyles";
 import { fmtSec } from "@/lib/time";
+import { useEscape } from "@/lib/useDismiss";
 
 interface Props {
   tracks: Track[];
@@ -21,13 +21,7 @@ export function FullscreenPlayer({
   onTogglePlay,
   onClose,
 }: Props) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscape(onClose);
 
   const videoTracks = tracks
     .filter((t) => t.kind === "video")

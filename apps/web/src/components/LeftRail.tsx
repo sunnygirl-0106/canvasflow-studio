@@ -1,9 +1,11 @@
-import { useState } from "react";
 import { Plus, Folder, History } from "lucide-react";
+import { useCanvas } from "@/store/canvasStore";
 import { AddNodePanel } from "./AddNodePanel";
 
 export function LeftRail() {
-  const [addOpen, setAddOpen] = useState(false);
+  const addPanel = useCanvas((s) => s.addPanel);
+  const setAddPanel = useCanvas((s) => s.setAddPanel);
+  const addOpen = addPanel.open;
 
   return (
     <>
@@ -19,10 +21,9 @@ export function LeftRail() {
           boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
         }}
       >
-        {/* Add button (dark filled, ring when active) */}
         <button
           data-add-toggle
-          onClick={() => setAddOpen((v) => !v)}
+          onClick={() => setAddPanel({ open: !addOpen })}
           className="flex items-center justify-center rounded-xl transition-shadow"
           style={{
             width: 40,
@@ -34,7 +35,6 @@ export function LeftRail() {
           <Plus className="w-5 h-5" style={{ color: "#FFFFFF" }} strokeWidth={2.5} />
         </button>
 
-        {/* Folder */}
         <button
           className="flex items-center justify-center rounded-xl hover:bg-slate-50"
           style={{ width: 40, height: 40 }}
@@ -42,7 +42,6 @@ export function LeftRail() {
           <Folder className="w-[20px] h-[20px]" style={{ color: "#64748B" }} strokeWidth={1.8} />
         </button>
 
-        {/* History */}
         <button
           className="flex items-center justify-center rounded-xl hover:bg-slate-50"
           style={{ width: 40, height: 40 }}
@@ -51,7 +50,7 @@ export function LeftRail() {
         </button>
       </div>
 
-      <AddNodePanel open={addOpen} onClose={() => setAddOpen(false)} />
+      <AddNodePanel />
     </>
   );
 }

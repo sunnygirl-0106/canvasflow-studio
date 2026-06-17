@@ -172,6 +172,10 @@ export interface ScriptData {
   assets?: ScriptAsset[];
   globalStyle?: string;
   assetGroupsMaterialized?: boolean;
+  // Set when the user ungroups the asset group. Once detached, the materialized
+  // image nodes become independent and the store stops auto-rebuilding the group
+  // when assets are regenerated.
+  assetGroupDetached?: boolean;
 }
 
 export const SCRIPT_MODELS = ["GVLM 3.1"];
@@ -194,17 +198,48 @@ interface NodeDataBase {
   [key: string]: unknown;
 }
 
+export type NodeStatus = "empty" | "generating" | "ready";
+
+export type VideoMode = "text" | "firstFrame" | "headTail" | "ref";
+
 export interface ImageNodeData extends NodeDataBase {
   src?: string;
+  status?: NodeStatus;
+  prompt?: string;
+  model?: string;
+  useMainImage?: boolean;
+  estimatedCost?: number;
+  progress?: number;
+  // When this image node was materialized from a script's asset, these link it
+  // back to the source asset so the store can keep its `src` in sync when the
+  // asset is regenerated. Cleared if the asset group is ungrouped (detached).
+  assetScriptId?: string;
+  assetId?: string;
 }
 
 export interface GenerateImageNodeData extends NodeDataBase {
   src?: string;
+  status?: NodeStatus;
+  prompt?: string;
+  model?: string;
+  useMainImage?: boolean;
+  estimatedCost?: number;
+  progress?: number;
 }
 
 export interface GenerateVideoNodeData extends NodeDataBase {
   src?: string;
   duration?: number;
+  status?: NodeStatus;
+  prompt?: string;
+  model?: string;
+  videoMode?: VideoMode;
+  aspect?: string;
+  resolution?: string;
+  withSound?: boolean;
+  estimatedCost?: number;
+  progress?: number;
+  referenceNodeId?: string;
 }
 
 export interface CompositionNodeData extends NodeDataBase {
@@ -220,12 +255,23 @@ export interface AudioNodeData extends NodeDataBase {
 
 export interface GroupNodeData extends NodeDataBase {
   memberIds: string[];
-  members: { id: string; kind: NodeKind; src?: string; name?: string; duration?: number }[];
+  // Name + kind only. `src` is intentionally NOT cached here — the renderer
+  // looks up the live member node by id and reads its current `src`, so
+  // regenerating a source image immediately reflects in the group thumbnail.
+  // `duration` is the planned duration for to-be-generated videos in a batch
+  // group; it is the group's own decision, not derived.
+  members: { id: string; kind: NodeKind; name?: string; duration?: number }[];
   groupColor: string;
   groupLayout: "grid" | "horizontal" | "vertical";
   groupWidth?: number;
   groupHeight?: number;
   executing?: boolean;
+  // `frame: true` → render as a labelled dashed container around its real
+  // member nodes (used by asset groups whose members are real image nodes),
+  // rather than as a self-contained thumbnail card. Avoids double-rendering.
+  frame?: boolean;
+  // For asset groups: the script node this group's assets belong to.
+  sourceScriptId?: string;
 }
 
 export interface StoryboardNodeData extends NodeDataBase {
@@ -405,9 +451,9 @@ export function createAudioClip(opts: {
 // ── Node name map ───────────────────────────────────────────────────────────
 
 export const NODE_DEFAULT_NAMES: Record<NodeKind, string> = {
-  image: "新图片",
-  generateImage: "AI 生图",
-  generateVideo: "AI 视频",
+  image: "图片",
+  generateImage: "图片",
+  generateVideo: "视频",
   composition: "视频合成",
   audio: "音频",
   nodeGroup: "组",

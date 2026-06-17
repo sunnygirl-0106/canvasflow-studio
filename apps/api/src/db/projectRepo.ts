@@ -33,8 +33,6 @@ const createStmt = db.prepare(
   "INSERT INTO projects (id, name) VALUES (?, ?)",
 );
 
-const removeStmt = db.prepare("DELETE FROM projects WHERE id = ?");
-
 export function listProjects(): ProjectSummary[] {
   const rows = listStmt.all() as Pick<ProjectRow, "id" | "name" | "updated_at">[];
   return rows.map((r) => ({
@@ -55,8 +53,4 @@ export function upsertProject(id: string, name: string, canvas: string): void {
 export function createProject(id: string, name: string): ProjectRow {
   createStmt.run(id, name);
   return getByIdStmt.get(id) as ProjectRow;
-}
-
-export function removeProject(id: string): void {
-  removeStmt.run(id);
 }

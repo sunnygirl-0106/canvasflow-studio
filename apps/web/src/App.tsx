@@ -3,6 +3,7 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
+  MarkerType,
   ReactFlowProvider,
   useStoreApi,
   type NodeProps,
@@ -30,7 +31,6 @@ import { Toolbar } from "@/components/Toolbar";
 import { BottomDock } from "@/components/BottomDock";
 
 import { ExportDialog } from "@/components/dialogs/ExportDialog";
-import { ImageNode } from "@/components/nodes/ImageNode";
 import { GenerateImageNode } from "@/components/nodes/GenerateImageNode";
 import { GenerateVideoNode } from "@/components/nodes/GenerateVideoNode";
 import { CompositionNode } from "@/components/nodes/CompositionNode";
@@ -90,12 +90,22 @@ function Workspace() {
 
 // Node type components — defined at module level to avoid recreation on each render
 const nodeTypes = {
-  image: (props: NodeProps) => <ImageNode data={props.data as ImageNodeData} />,
+  image: (props: NodeProps) => (
+    <GenerateImageNode id={props.id} data={props.data as ImageNodeData} selected={props.selected} />
+  ),
   generateImage: (props: NodeProps) => (
-    <GenerateImageNode id={props.id} data={props.data as GenerateImageNodeData} />
+    <GenerateImageNode
+      id={props.id}
+      data={props.data as GenerateImageNodeData}
+      selected={props.selected}
+    />
   ),
   generateVideo: (props: NodeProps) => (
-    <GenerateVideoNode id={props.id} data={props.data as GenerateVideoNodeData} />
+    <GenerateVideoNode
+      id={props.id}
+      data={props.data as GenerateVideoNodeData}
+      selected={props.selected}
+    />
   ),
   composition: (props: NodeProps) => (
     <CompositionNode id={props.id} data={props.data as CompositionNodeData} />
@@ -167,16 +177,27 @@ function Canvas() {
 
   const rfEdges = useMemo<RFEdge[]>(
     () =>
-      edges.map((e) => ({
-        id: e.id,
-        source: e.from,
-        sourceHandle: e.sourceHandle ?? "out",
-        target: clipHostMap.get(e.to) ?? e.to,
-        targetHandle: clipHostMap.has(e.to) ? e.to : (e.toHandle ?? undefined),
-        type: "default",
-        animated: true,
-        style: { stroke: e.color ?? "#56C7CF", strokeWidth: 2 },
-      })),
+      edges.map((e) => {
+        const stroke = e.color ?? "#56C7CF";
+        return {
+          id: e.id,
+          source: e.from,
+          sourceHandle: e.sourceHandle ?? "out",
+          target: clipHostMap.get(e.to) ?? e.to,
+          targetHandle: clipHostMap.has(e.to) ? e.to : (e.toHandle ?? undefined),
+          type: "default",
+          animated: true,
+          style: { stroke, strokeWidth: 2 },
+          // Arrow into the target handle. ArrowClosed is a filled triangle —
+          // matches the design where the edge "points into" the plus pill.
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: stroke,
+            width: 18,
+            height: 18,
+          },
+        };
+      }),
     [edges, clipHostMap],
   );
 
@@ -368,8 +389,8 @@ function Canvas() {
         <Background
           variant={BackgroundVariant.Dots}
           gap={20}
-          size={1}
-          color="rgba(15,23,42,0.10)"
+          size={1.2}
+          color="rgba(255,255,255,0.16)"
         />
         <MultiSelectionCTA />
         <StoryboardToolbar />

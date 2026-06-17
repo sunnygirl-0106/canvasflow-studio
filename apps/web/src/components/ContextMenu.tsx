@@ -15,7 +15,7 @@ import {
   RefreshCw,
   type LucideIcon,
 } from "lucide-react";
-import { useCanvas, type NodeKind } from "@/store/canvasStore";
+import { useCanvas, type CanvasNode, type NodeKind } from "@/store/canvasStore";
 import { ConfirmDialog } from "@/components/storyboard/ConfirmDialog";
 
 const MEDIA_KINDS: NodeKind[] = ["image", "generateImage", "generateVideo"];
@@ -207,6 +207,28 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
   const openScript = useCanvas((s) => s.openScript);
   const regenerateScript = useCanvas((s) => s.regenerateScript);
   const setContextMenu = useCanvas((s) => s.setContextMenu);
+  const addNodeAtPosition = useCanvas((s) => s.addNodeAtPosition);
+  const updateNode = useCanvas((s) => s.updateNode);
+  const select = useCanvas((s) => s.select);
+  const setAddPanel = useCanvas((s) => s.setAddPanel);
+
+  const uploadImage = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const id = addNodeAtPosition("generateImage", 600, 200);
+      updateNode(
+        id,
+        (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
+      );
+      select(id);
+    };
+    input.click();
+  };
 
   return useMemo<ItemSpec[]>(() => {
     if (!menu) return [];
@@ -397,7 +419,7 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
       icon: Upload,
       label: "上传",
       onClick: () => {
-        // TODO: hook up upload flow
+        uploadImage();
         close();
       },
     });
@@ -407,8 +429,10 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
       icon: Plus,
       label: "添加节点",
       onClick: () => {
-        // TODO: open AddNodePanel
+        const x = menu?.x ?? 200;
+        const y = menu?.y ?? 200;
         close();
+        setAddPanel({ open: true, x, y });
       },
     });
 
@@ -485,5 +509,9 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
     regenerateScript,
     setContextMenu,
     onConfirmDelete,
+    addNodeAtPosition,
+    select,
+    updateNode,
+    setAddPanel,
   ]);
 }

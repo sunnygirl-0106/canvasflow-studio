@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import type { NodeKind } from "@/store/types";
+import { Modal } from "@/components/ui/Modal";
 
 const GENERATION_KINDS: NodeKind[] = ["generateImage", "generateVideo"];
 const COST_PER_NODE = 130;
@@ -23,26 +23,11 @@ export function ExecuteGroupDialog({
   onConfirm,
   onCancel,
 }: ExecuteGroupDialogProps) {
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onCancel]);
-
-  if (!open) return null;
-
   const genNodes = members.filter((m) => GENERATION_KINDS.includes(m.kind));
   const totalCost = genNodes.length * COST_PER_NODE;
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.3)" }}
-      onClick={onCancel}
-    >
+    <Modal open={open} onClose={onCancel}>
       <div
         className="rounded-2xl"
         style={{
@@ -52,7 +37,6 @@ export function ExecuteGroupDialog({
           padding: "32px 32px 28px",
           fontFamily: "PingFang SC, Inter, system-ui",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Title */}
         <h3 className="text-[20px] font-bold mb-5" style={{ color: "#0F172A" }}>
@@ -99,6 +83,6 @@ export function ExecuteGroupDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -9,12 +9,7 @@ import {
   ScrollText,
   ChevronRight,
 } from "lucide-react";
-import { useCanvas, type NodeKind } from "@/store/canvasStore";
-
-interface AddNodePanelProps {
-  open: boolean;
-  onClose: () => void;
-}
+import { useCanvas, type CanvasNode, type NodeKind } from "@/store/canvasStore";
 
 type PanelKind = NodeKind | "scriptMenu";
 
@@ -23,7 +18,6 @@ interface PanelItem {
   title: string;
   subtitle: string;
   icon: typeof FileText;
-  // future: badge?: "new"
   isNew?: boolean;
 }
 
@@ -43,15 +37,23 @@ const NODE_ITEMS: PanelItem[] = [
 ];
 
 const RESOURCE_ITEMS: PanelItem[] = [
-  { key: "image", title: "上传", subtitle: "支持图片、视频", icon: Upload },
+  { key: "image", title: "上传", subtitle: "支持图片、视频和音频", icon: Upload },
 ];
 
-export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
-  const addNode = useCanvas((s) => s.addNode);
+const PANEL_W = 340;
+
+export function AddNodePanel() {
+  const addPanel = useCanvas((s) => s.addPanel);
+  const setAddPanel = useCanvas((s) => s.setAddPanel);
+  const addNodeAtPosition = useCanvas((s) => s.addNodeAtPosition);
+  const updateNode = useCanvas((s) => s.updateNode);
+  const select = useCanvas((s) => s.select);
   const ref = useRef<HTMLDivElement>(null);
   const [scriptMenuOpen, setScriptMenuOpen] = useState(false);
 
-  // Click outside / ESC to close
+  const open = addPanel.open;
+  const onClose = () => setAddPanel({ open: false });
+
   useEffect(() => {
     if (!open) return;
     setScriptMenuOpen(false);
@@ -59,7 +61,6 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
       if (!ref.current) return;
       const target = e.target as Node;
       if (ref.current.contains(target)) return;
-      // Also ignore clicks on the LeftRail + button (it toggles itself)
       const railToggle = document.querySelector("[data-add-toggle]");
       if (railToggle && railToggle.contains(target)) return;
       onClose();
@@ -73,31 +74,70 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
+
+  const flowAnchorX = 600;
+  const flowAnchorY = 200;
+
+  const uploadFlow = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const id = addNodeAtPosition("generateImage", flowAnchorX, flowAnchorY);
+      updateNode(
+        id,
+        (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
+      );
+      select(id);
+      onClose();
+    };
+    input.click();
+  };
 
   const handleSelect = (kind: PanelKind) => {
     if (kind === "scriptMenu") {
       setScriptMenuOpen((v) => !v);
       return;
     }
-    addNode(kind as NodeKind);
+    if (kind === "image") {
+      uploadFlow();
+      return;
+    }
+    const id = addNodeAtPosition(kind as NodeKind, flowAnchorX, flowAnchorY);
+    select(id);
     onClose();
   };
+
+  // Position: either anchored to right-click location or docked to LeftRail
+  const docked = addPanel.x === undefined;
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1920;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
+  const posStyle: React.CSSProperties = docked
+    ? { left: 78, top: 24 }
+    : {
+        left: Math.min(addPanel.x!, vw - PANEL_W - 12),
+        top: Math.min(addPanel.y!, vh - 480),
+      };
 
   return (
     <div
       ref={ref}
-      className="absolute z-30 rounded-2xl fade-in"
+      className="fixed z-30 rounded-2xl fade-in"
       style={{
-        left: 78,
-        top: 24,
-        width: 340,
+        ...posStyle,
+        width: PANEL_W,
         padding: 16,
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0 18px 40px rgba(15,23,42,0.10)",
+        background: "#1F2125",
+        border: "1px solid #2A2D33",
+        boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
+        fontFamily: "PingFang SC, Inter, system-ui",
       }}
     >
       <SectionLabel>添加节点</SectionLabel>
@@ -109,12 +149,12 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
               onClick={() => handleSelect(item.key)}
               showArrow={item.key === "scriptMenu"}
             />
-            {/* Script entry submenu */}
             {item.key === "scriptMenu" && scriptMenuOpen && (
               <ScriptEntryMenu
                 onSelect={(mode) => {
                   if (mode === "script") {
-                    addNode("script");
+                    const id = addNodeAtPosition("script", flowAnchorX, flowAnchorY);
+                    select(id);
                     onClose();
                   }
                 }}
@@ -125,7 +165,7 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
       </div>
 
       <SectionLabel>添加资源</SectionLabel>
-      <div className="flex flex-col gap-2 mb-4">
+      <div className="flex flex-col gap-2 mb-1">
         {RESOURCE_ITEMS.map((item) => (
           <PanelCard key={item.key} item={item} onClick={() => handleSelect(item.key)} />
         ))}
@@ -136,10 +176,7 @@ export function AddNodePanel({ open, onClose }: AddNodePanelProps) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="text-[12px] font-medium mb-2 px-1"
-      style={{ color: "#94A3B8", fontFamily: "PingFang SC, Inter, system-ui" }}
-    >
+    <div className="text-[12px] font-medium mb-2 px-1" style={{ color: "#6B7280" }}>
       {children}
     </div>
   );
@@ -158,27 +195,31 @@ function PanelCard({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 rounded-xl text-left transition-colors hover:bg-slate-100"
+      className="flex items-center gap-3 rounded-xl text-left transition-colors"
       style={{
-        background: "#F8FAFC",
-        padding: "12px 14px",
+        background: "transparent",
+        padding: "10px 12px",
       }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "#2A2D33")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
-      <Icon className="w-7 h-7 flex-shrink-0" style={{ color: "#475569" }} strokeWidth={1.6} />
+      <span
+        className="flex items-center justify-center rounded-lg flex-shrink-0"
+        style={{ width: 36, height: 36, background: "transparent" }}
+      >
+        <Icon className="w-6 h-6" style={{ color: "#E5E7EB" }} strokeWidth={1.6} />
+      </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span
-            className="text-[15px] font-semibold"
-            style={{ color: "#0F172A", fontFamily: "PingFang SC, Inter, system-ui" }}
-          >
+          <span className="text-[15px] font-semibold" style={{ color: "#F3F4F6" }}>
             {title}
           </span>
           {isNew && (
             <span
               className="text-[10px] font-bold rounded-full px-1.5 py-0.5"
               style={{
-                background: "#F1F5F9",
-                color: "#64748B",
+                background: "#2A2D33",
+                color: "#9CA3AF",
                 fontFamily: "Inter, system-ui",
                 lineHeight: 1,
               }}
@@ -187,14 +228,11 @@ function PanelCard({
             </span>
           )}
         </div>
-        <div
-          className="text-[12px] mt-0.5 truncate"
-          style={{ color: "#94A3B8", fontFamily: "PingFang SC, Inter, system-ui" }}
-        >
+        <div className="text-[12px] mt-0.5 truncate" style={{ color: "#6B7280" }}>
           {subtitle}
         </div>
       </div>
-      {showArrow && <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: "#94A3B8" }} />}
+      {showArrow && <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: "#6B7280" }} />}
     </button>
   );
 }
@@ -219,9 +257,9 @@ function ScriptEntryMenu({
         marginLeft: 8,
         width: 220,
         padding: 6,
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0 8px 24px rgba(15,23,42,0.10)",
+        background: "#1F2125",
+        border: "1px solid #2A2D33",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
       }}
     >
       {entries.map((e) => (
@@ -230,18 +268,17 @@ function ScriptEntryMenu({
           className="w-full text-left rounded-lg transition-colors"
           style={{
             padding: "10px 12px",
-            color: e.enabled ? "#0F172A" : "#CBD5E1",
-            fontFamily: "PingFang SC, Inter, system-ui",
+            color: e.enabled ? "#E5E7EB" : "#4B5563",
             fontSize: 13,
             cursor: e.enabled ? "pointer" : "default",
           }}
-          onMouseEnter={(ev) => e.enabled && (ev.currentTarget.style.background = "#F8FAFC")}
+          onMouseEnter={(ev) => e.enabled && (ev.currentTarget.style.background = "#2A2D33")}
           onMouseLeave={(ev) => (ev.currentTarget.style.background = "transparent")}
           onClick={() => (e.enabled ? onSelect(e.mode) : undefined)}
         >
           {e.label}
           {!e.enabled && (
-            <span className="ml-1.5 text-[11px]" style={{ color: "#CBD5E1" }}>
+            <span className="ml-1.5 text-[11px]" style={{ color: "#4B5563" }}>
               即将上线
             </span>
           )}

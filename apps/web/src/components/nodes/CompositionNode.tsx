@@ -1,9 +1,12 @@
 import { Handle, Position } from "@xyflow/react";
+import { memo } from "react";
 import { Scissors, Play } from "lucide-react";
 import { useCanvas, type CompositionNodeData } from "@/store/canvasStore";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
 
-export function CompositionNode({ id, data }: { id: string; data: CompositionNodeData }) {
+export const CompositionNode = memo(CompositionNodeImpl);
+
+function CompositionNodeImpl({ id, data }: { id: string; data: CompositionNodeData }) {
   const openComposition = useCanvas((s) => s.openComposition);
   // Step 2: summarize from the main video track (V1); richer track summary comes later.
   const shots = (data.tracks ?? []).find((t) => t.kind === "video")?.clips ?? [];

@@ -1,11 +1,14 @@
 import { Handle, Position } from "@xyflow/react";
+import { memo } from "react";
 import { AudioLines } from "lucide-react";
 import type { AudioNodeData } from "@/store/canvasStore";
 
 // Faux waveform bars (demo — no real audio decoding).
 const BARS = [6, 12, 20, 14, 8, 16, 24, 10, 18, 9, 14, 22, 11, 7, 15, 20, 13, 8, 17, 12];
 
-export function AudioNode({ data }: { data: AudioNodeData }) {
+export const AudioNode = memo(AudioNodeImpl);
+
+function AudioNodeImpl({ data }: { data: AudioNodeData }) {
   const dur = data.duration ?? 0;
   return (
     <div className="group relative w-[220px] rounded-xl bg-card border border-border node-shadow overflow-visible fade-in">

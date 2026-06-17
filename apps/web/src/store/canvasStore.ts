@@ -37,11 +37,51 @@ function createNodeByKind(
 
   switch (kind) {
     case "image":
-      return { id, kind, x, y, data: { name, src: `https://picsum.photos/seed/${seed}/400/225` } };
+      return {
+        id,
+        kind,
+        x,
+        y,
+        data: {
+          name,
+          src: `https://picsum.photos/seed/${seed}/400/225`,
+          status: "ready",
+          model: "phan-nano-l",
+        },
+      };
     case "generateImage":
-      return { id, kind, x, y, data: { name } };
+      return {
+        id,
+        kind,
+        x,
+        y,
+        data: {
+          name,
+          status: "empty",
+          model: "phan-nano-l",
+          prompt: "",
+          estimatedCost: 36,
+        },
+      };
     case "generateVideo":
-      return { id, kind, x, y, data: { name } };
+      return {
+        id,
+        kind,
+        x,
+        y,
+        data: {
+          name,
+          status: "empty",
+          videoMode: "text",
+          model: "SD 2.0",
+          aspect: "9:16",
+          resolution: "720p",
+          duration: 5,
+          withSound: true,
+          prompt: "",
+          estimatedCost: 788,
+        },
+      };
     case "composition":
       return { id, kind, x, y, data: { name, width: 1200, pxPerSecond: 60, tracks: [] } };
     case "audio":
@@ -108,6 +148,28 @@ function getNodeTracks(n: CanvasNode) {
 
 function sanitizeNodes(nodes: CanvasNode[]): CanvasNode[] {
   return nodes.map((n) => {
+    if (n.kind === "image" || n.kind === "generateImage") {
+      const status = n.data.status ?? (n.data.src ? "ready" : "empty");
+      const fixed = status === "generating" ? "empty" : status;
+      // Per refactor 原则 A: a node with no main image must not carry a
+      // persisted `useMainImage`. Older saves baked in `true`, which would
+      // keep the toggle checked on empty nodes regardless of the new
+      // derived default. Strip it so the panel falls back to `?? hasMain`.
+      const hasMain = !!n.data.src && fixed === "ready";
+      const staleMainFlag = !hasMain && n.data.useMainImage !== undefined;
+      if (fixed !== n.data.status || staleMainFlag) {
+        const data = { ...n.data, status: fixed };
+        if (staleMainFlag) delete (data as { useMainImage?: boolean }).useMainImage;
+        return { ...n, data } as CanvasNode;
+      }
+    }
+    if (n.kind === "generateVideo") {
+      const status = n.data.status ?? (n.data.src ? "ready" : "empty");
+      const fixed = status === "generating" ? "empty" : status;
+      if (fixed !== n.data.status) {
+        return { ...n, data: { ...n.data, status: fixed } } as CanvasNode;
+      }
+    }
     if (n.kind === "nodeGroup" && n.data.executing) {
       return { ...n, data: { ...n.data, executing: false } };
     }
@@ -174,6 +236,25 @@ function sanitizeNodes(nodes: CanvasNode[]): CanvasNode[] {
   });
 }
 
+// ── Reconcile editor/selection refs after undo/redo ─────────────────────────
+// A history snapshot only restores {nodes, edges}. If the restored canvas no
+// longer contains the node an open editor / selection points at, those ids
+// dangle (e.g. editorCompId referencing a composition that was just undone away,
+// which would crash the editor). Null out any ref whose target is gone.
+
+function reconcileEditorRefs(restoredNodes: CanvasNode[], s: StoreState): Partial<StoreState> {
+  const ids = new Set(restoredNodes.map((n) => n.id));
+  const patch: Partial<StoreState> = {};
+  if (s.selectedId && !ids.has(s.selectedId)) patch.selectedId = null;
+  if (s.editorCompId && !ids.has(s.editorCompId)) {
+    patch.editorCompId = null;
+    patch.selectedClipId = null;
+  }
+  if (s.editorScriptId && !ids.has(s.editorScriptId)) patch.editorScriptId = null;
+  if (s.batchVideoSbId && !ids.has(s.batchVideoSbId)) patch.batchVideoSbId = null;
+  return patch;
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 // ── Auto-save (debounced) ──────────────────────────────────────────────────
@@ -188,6 +269,13 @@ function scheduleSave() {
   }, 2000);
 }
 
+function cancelScheduledSave() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+}
+
 export const useCanvas = create<StoreState>((set, get) => ({
   projectId: DEFAULT_PROJECT_ID,
   projectName: "古风短片 · Demo",
@@ -197,6 +285,7 @@ export const useCanvas = create<StoreState>((set, get) => ({
   panelOpen: false,
   exportOpen: false,
   contextMenu: null,
+  addPanel: { open: false },
   past: [],
   future: [],
 
@@ -221,6 +310,16 @@ export const useCanvas = create<StoreState>((set, get) => ({
         future: [],
         saveStatus: "saved",
       });
+      // Self-heal: reconcile each script's asset group so generated assets are
+      // mounted as real image nodes — including older projects saved before this
+      // logic existed, or ones left empty by the previous one-shot latch bug.
+      for (const n of get().nodes) {
+        if (n.kind === "script") get().materializeAssetGroups(n.id);
+      }
+      // The subscription below schedules a save on every nodes/edges change,
+      // including this one. Cancel it so a fresh load doesn't immediately
+      // round-trip back to the server.
+      cancelScheduledSave();
     } catch {
       // Failed to load — keep current mock data
       console.warn(`Failed to load project ${id}, using mock data`);
@@ -246,30 +345,31 @@ export const useCanvas = create<StoreState>((set, get) => ({
       past: [...past.slice(-49), { nodes: structuredClone(nodes), edges: structuredClone(edges) }],
       future: [],
     });
-    scheduleSave();
   },
 
   undo: () => {
-    const { past, future, nodes, edges } = get();
-    if (!past.length) return;
-    const prev = past[past.length - 1];
+    const s = get();
+    if (!s.past.length) return;
+    const prev = s.past[s.past.length - 1];
     set({
-      past: past.slice(0, -1),
-      future: [{ nodes, edges }, ...future].slice(0, 50),
+      past: s.past.slice(0, -1),
+      future: [{ nodes: s.nodes, edges: s.edges }, ...s.future].slice(0, 50),
       nodes: prev.nodes,
       edges: prev.edges,
+      ...reconcileEditorRefs(prev.nodes, s),
     });
   },
 
   redo: () => {
-    const { past, future, nodes, edges } = get();
-    if (!future.length) return;
-    const next = future[0];
+    const s = get();
+    if (!s.future.length) return;
+    const next = s.future[0];
     set({
-      future: future.slice(1),
-      past: [...past, { nodes, edges }].slice(-50),
+      future: s.future.slice(1),
+      past: [...s.past, { nodes: s.nodes, edges: s.edges }].slice(-50),
       nodes: next.nodes,
       edges: next.edges,
+      ...reconcileEditorRefs(next.nodes, s),
     });
   },
 
@@ -282,7 +382,6 @@ export const useCanvas = create<StoreState>((set, get) => ({
         return pos ? { ...n, x: pos.x, y: pos.y } : n;
       }),
     }));
-    scheduleSave();
   },
 
   updateNode: (id, patch) =>
@@ -325,16 +424,28 @@ export const useCanvas = create<StoreState>((set, get) => ({
     }),
 
   addNode: (kind) => {
-    get().pushHistory();
-    const id = `${kind}-${crypto.randomUUID().slice(0, 8)}`;
     const x = 600 + Math.random() * 80;
     const y = 200 + Math.random() * 80;
-    const name =
-      kind === "composition"
-        ? `视频合成 ${get().nodes.filter((n) => n.kind === "composition").length + 1}`
-        : undefined;
+    return get().addNodeAtPosition(kind, x, y);
+  },
+
+  addNodeAtPosition: (kind, x, y) => {
+    get().pushHistory();
+    const id = `${kind}-${crypto.randomUUID().slice(0, 8)}`;
+    const existing = get().nodes;
+    let name: string | undefined;
+    if (kind === "composition") {
+      name = `视频合成 ${existing.filter((n) => n.kind === "composition").length + 1}`;
+    } else if (kind === "image" || kind === "generateImage") {
+      const count = existing.filter((n) => n.kind === "image" || n.kind === "generateImage").length;
+      name = `图片${count + 1}`;
+    } else if (kind === "generateVideo") {
+      const count = existing.filter((n) => n.kind === "generateVideo").length;
+      name = `视频${count + 1}`;
+    }
     const node = createNodeByKind(kind, id, x, y, name);
     set((s) => ({ nodes: [...s.nodes, node] }));
+    return id;
   },
 
   removeNode: (id) => {
@@ -369,13 +480,16 @@ export const useCanvas = create<StoreState>((set, get) => ({
   select: (id) =>
     set((s) => {
       const node = id ? s.nodes.find((n) => n.id === id) : null;
-      const showPanel = !!id && node?.kind !== "generateVideo";
+      const usesToolbarPanel =
+        node?.kind === "generateVideo" || node?.kind === "generateImage" || node?.kind === "image";
+      const showPanel = !!id && !!node && !usesToolbarPanel;
       return { selectedId: id, panelOpen: showPanel };
     }),
 
   togglePanel: (open) => set((s) => ({ panelOpen: open ?? !s.panelOpen })),
   setExport: (v) => set({ exportOpen: v }),
   setContextMenu: (m) => set({ contextMenu: m }),
+  setAddPanel: (panel) => set({ addPanel: panel }),
 
   totalDuration: () => {
     const { nodes } = get();
@@ -396,3 +510,13 @@ export const useCanvas = create<StoreState>((set, get) => ({
   ...createGroupSlice(set, get),
   ...createScriptSlice(set, get),
 }));
+
+// Persist any nodes/edges mutation. Catches every slice path (updateNode,
+// asset generation, composition edits, etc.) uniformly — without this each
+// mutation site would need its own scheduleSave() call, and the existing
+// ones were inconsistent (image generation completion was silently dropped).
+useCanvas.subscribe((curr, prev) => {
+  if (curr.nodes !== prev.nodes || curr.edges !== prev.edges) {
+    scheduleSave();
+  }
+});

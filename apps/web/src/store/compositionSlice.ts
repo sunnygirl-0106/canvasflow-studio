@@ -18,6 +18,21 @@ import {
   createAudioClip,
 } from "./types";
 
+// Append `clip` to the target audio track, creating an "A1" track when the
+// composition has no audio track yet. Shared by addToComposition and
+// addAudioClipFromNode (previously duplicated verbatim).
+function upsertAudioClip(
+  trks: Track[],
+  targetTrackId: string,
+  clip: Clip,
+  hasAudioTrack: boolean,
+): Track[] {
+  if (!hasAudioTrack) {
+    return [...trks, { id: targetTrackId, kind: "audio", name: "A1", clips: [clip] }];
+  }
+  return trks.map((t) => (t.id === targetTrackId ? { ...t, clips: [...t.clips, clip] } : t));
+}
+
 export function createCompositionSlice(set: SetState, get: GetState) {
   return {
     // ── Core composition actions ──────────────────────────────────────────────
@@ -161,18 +176,12 @@ export function createCompositionSlice(set: SetState, get: GetState) {
         set((s) => ({
           nodes: s.nodes.map((n) => {
             if (n.id !== compId || n.kind !== "composition") return n;
-            const trks = n.data.tracks;
-            let newTracks: Track[];
-            if (audioTracks.length === 0) {
-              newTracks = [
-                ...trks,
-                { id: targetTrackId, kind: "audio" as TrackKind, name: "A1", clips: [newClip] },
-              ];
-            } else {
-              newTracks = trks.map((t) =>
-                t.id === targetTrackId ? { ...t, clips: [...t.clips, newClip] } : t,
-              );
-            }
+            const newTracks = upsertAudioClip(
+              n.data.tracks,
+              targetTrackId,
+              newClip,
+              audioTracks.length > 0,
+            );
             return { ...n, data: { ...n.data, tracks: newTracks } } as CanvasNode;
           }),
           edges: [...s.edges, newEdge],
@@ -303,10 +312,10 @@ export function createCompositionSlice(set: SetState, get: GetState) {
     },
 
     addAudioTrack: (compId: string) => {
-      get().pushHistory();
       const { nodes } = get();
       const comp = nodes.find((n) => n.id === compId);
       if (!comp || comp.kind !== "composition") return;
+      get().pushHistory();
       const audioTracks = comp.data.tracks.filter((t) => t.kind === "audio");
       const ts = Date.now();
       const newTrack: Track = {
@@ -339,6 +348,30 @@ export function createCompositionSlice(set: SetState, get: GetState) {
         ),
       })),
 
+    // Right-edge resize that ripples subsequent same-track clips so they
+    // never overlap the lengthened clip.
+    resizeClipRight: (compId: string, clipId: string, newDuration: number) =>
+      set((s) => ({
+        nodes: patchTracks(s.nodes, compId, (tracks) =>
+          tracks.map((t) => {
+            const target = t.clips.find((c) => c.id === clipId);
+            if (!target) return t;
+            const delta = newDuration - target.duration;
+            const oldEnd = target.startSec + target.duration;
+            return {
+              ...t,
+              clips: t.clips.map((c) => {
+                if (c.id === clipId) return { ...c, duration: newDuration };
+                if (c.startSec >= oldEnd - 1e-6) {
+                  return { ...c, startSec: c.startSec + delta };
+                }
+                return c;
+              }),
+            };
+          }),
+        ),
+      })),
+
     removeClip: (compId: string, clipId: string) => {
       get().pushHistory();
       set((s) => ({
@@ -349,49 +382,42 @@ export function createCompositionSlice(set: SetState, get: GetState) {
     },
 
     moveClip: (compId: string, clipId: string, toTrackId: string, toStartSec: number) => {
+      // Validate the move BEFORE pushing history so a rejected drop (clip gone,
+      // wrong track kind, overlap) doesn't pollute the undo stack with a no-op.
+      const comp = get().nodes.find((n) => n.id === compId);
+      if (!comp || comp.kind !== "composition") return;
+      const tracks = comp.data.tracks;
+
+      let sourceClip: Clip | null = null;
+      for (const t of tracks) {
+        const c = t.clips.find((c) => c.id === clipId);
+        if (c) {
+          sourceClip = c;
+          break;
+        }
+      }
+      if (!sourceClip) return;
+
+      const toTrack = tracks.find((t) => t.id === toTrackId);
+      if (!toTrack) return;
+      if (sourceClip.clipKind !== toTrack.kind) return;
+
+      const updatedClip: Clip = { ...sourceClip, startSec: toStartSec };
+      const hasOverlap = toTrack.clips.some((c) => c.id !== clipId && overlaps(c, updatedClip));
+      if (hasOverlap) return;
+
       get().pushHistory();
-      set((s) => {
-        const comp = s.nodes.find((n) => n.id === compId);
-        if (!comp || comp.kind !== "composition") return {};
-        const tracks = comp.data.tracks;
-
-        let sourceClip: Clip | null = null;
-        for (const t of tracks) {
-          const c = t.clips.find((c) => c.id === clipId);
-          if (c) {
-            sourceClip = c;
-            break;
-          }
-        }
-        if (!sourceClip) return {};
-
-        const toTrack = tracks.find((t) => t.id === toTrackId);
-        if (!toTrack) return {};
-        if (sourceClip.clipKind !== toTrack.kind) return {};
-
-        let newTracks = tracks.map((t) => ({
-          ...t,
-          clips: t.clips.filter((c) => c.id !== clipId),
-        }));
-
-        const updatedClip: Clip = { ...sourceClip, startSec: toStartSec };
-
-        const targetAfterRemoval = newTracks.find((t) => t.id === toTrackId);
-        if (targetAfterRemoval) {
-          const hasOverlap = targetAfterRemoval.clips.some((c) => overlaps(c, updatedClip));
-          if (hasOverlap) return {};
-        }
-
-        newTracks = newTracks.map((t) =>
-          t.id !== toTrackId ? t : { ...t, clips: [...t.clips, updatedClip] },
-        );
-
-        return {
-          nodes: s.nodes.map((n) =>
-            n.id !== compId ? n : { ...n, data: { ...n.data, tracks: newTracks } },
-          ) as CanvasNode[],
-        };
-      });
+      set((s) => ({
+        nodes: patchTracks(s.nodes, compId, (trks) => {
+          const cleared = trks.map((t) => ({
+            ...t,
+            clips: t.clips.filter((c) => c.id !== clipId),
+          }));
+          return cleared.map((t) =>
+            t.id !== toTrackId ? t : { ...t, clips: [...t.clips, updatedClip] },
+          );
+        }),
+      }));
     },
 
     reorderVideoTrack: (compId: string, trackId: string, clipIds: string[]) =>
@@ -513,11 +539,11 @@ export function createCompositionSlice(set: SetState, get: GetState) {
     // ── Audio clip from node ──────────────────────────────────────────────────
 
     addAudioClipFromNode: (compId: string, nodeId: string, atSec?: number) => {
-      get().pushHistory();
       const { nodes } = get();
       const audioNode = nodes.find((n) => n.id === nodeId);
       const comp = nodes.find((n) => n.id === compId);
       if (!audioNode || audioNode.kind !== "audio" || !comp || comp.kind !== "composition") return;
+      get().pushHistory();
 
       const ts = Date.now();
       const tracks = comp.data.tracks;
@@ -542,18 +568,12 @@ export function createCompositionSlice(set: SetState, get: GetState) {
       set((s) => ({
         nodes: s.nodes.map((n) => {
           if (n.id !== compId || n.kind !== "composition") return n;
-          const trks = n.data.tracks;
-          let newTracks: Track[];
-          if (audioTracks.length === 0) {
-            newTracks = [
-              ...trks,
-              { id: targetTrackId, kind: "audio" as TrackKind, name: "A1", clips: [newClip] },
-            ];
-          } else {
-            newTracks = trks.map((t) =>
-              t.id === targetTrackId ? { ...t, clips: [...t.clips, newClip] } : t,
-            );
-          }
+          const newTracks = upsertAudioClip(
+            n.data.tracks,
+            targetTrackId,
+            newClip,
+            audioTracks.length > 0,
+          );
           return { ...n, data: { ...n.data, tracks: newTracks } } as CanvasNode;
         }),
       }));

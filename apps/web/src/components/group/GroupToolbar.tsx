@@ -15,15 +15,19 @@ import { useCanvas, type GroupNodeData } from "@/store/canvasStore";
 import { ColorMenu } from "./ColorMenu";
 import { LayoutMenu } from "./LayoutMenu";
 import { ExecuteGroupDialog } from "./ExecuteGroupDialog";
+import { ToolbarButton, ToolbarSep } from "@/components/ui/ToolbarButton";
 
 const TOOLBAR_GAP = 12;
 
 export function GroupToolbar() {
   const selectedId = useCanvas((s) => s.selectedId);
-  const nodes = useCanvas((s) => s.nodes);
-  const selectedGroup = selectedId
-    ? (nodes.find((n) => n.id === selectedId && n.kind === "nodeGroup") ?? null)
-    : null;
+  // Narrow selector: re-render only when the *selected group node* changes,
+  // not on every unrelated node move/add (subscribing to the whole array did).
+  const selectedGroup = useCanvas((s) =>
+    s.selectedId
+      ? (s.nodes.find((n) => n.id === s.selectedId && n.kind === "nodeGroup") ?? null)
+      : null,
+  );
 
   const setGroupColor = useCanvas((s) => s.setGroupColor);
   const setGroupLayout = useCanvas((s) => s.setGroupLayout);
@@ -106,21 +110,21 @@ export function GroupToolbar() {
           }}
         >
           {/* Ratio toggle */}
-          <VToolbarBtn onClick={() => {}}>
+          <ToolbarButton variant="light" onClick={() => {}}>
             <span
               className="inline-block rounded-full"
               style={{ width: 20, height: 20, background: "#CBD5E1" }}
             />
-          </VToolbarBtn>
+          </ToolbarButton>
 
-          <Sep light />
+          <ToolbarSep light />
 
           {/* Grid */}
-          <VToolbarBtn onClick={() => {}}>
+          <ToolbarButton variant="light" onClick={() => {}}>
             <LayoutGrid className="w-4 h-4" />
-          </VToolbarBtn>
+          </ToolbarButton>
 
-          <Sep light />
+          <ToolbarSep light />
 
           {/* Execute group — blue accent */}
           <button
@@ -142,21 +146,21 @@ export function GroupToolbar() {
             整组执行
           </button>
 
-          <Sep light />
+          <ToolbarSep light />
 
           {/* Ungroup */}
-          <VToolbarBtn onClick={() => ungroupGroup(id)}>
+          <ToolbarButton variant="light" onClick={() => ungroupGroup(id)}>
             <SquareDashedBottomCode className="w-3.5 h-3.5" />
             解组
-          </VToolbarBtn>
+          </ToolbarButton>
 
-          <Sep light />
+          <ToolbarSep light />
 
           {/* Batch download */}
-          <VToolbarBtn onClick={handleDownload}>
+          <ToolbarButton variant="light" onClick={handleDownload}>
             <ImageDown className="w-3.5 h-3.5" />
             批量下载
-          </VToolbarBtn>
+          </ToolbarButton>
         </div>
 
         <ExecuteGroupDialog
@@ -189,13 +193,16 @@ export function GroupToolbar() {
     >
       {/* Color */}
       <div className="relative">
-        <ToolbarBtn onClick={() => setOpenMenu(openMenu === "color" ? null : "color")}>
+        <ToolbarButton
+          variant="dark"
+          onClick={() => setOpenMenu(openMenu === "color" ? null : "color")}
+        >
           <span
             className="w-4 h-4 rounded-full inline-block border border-white/30"
             style={{ background: color }}
           />
           <ChevronDown className="w-3 h-3" />
-        </ToolbarBtn>
+        </ToolbarButton>
         {openMenu === "color" && (
           <ColorMenu
             current={color}
@@ -207,14 +214,17 @@ export function GroupToolbar() {
         )}
       </div>
 
-      <Sep />
+      <ToolbarSep />
 
       {/* Layout */}
       <div className="relative">
-        <ToolbarBtn onClick={() => setOpenMenu(openMenu === "layout" ? null : "layout")}>
+        <ToolbarButton
+          variant="dark"
+          onClick={() => setOpenMenu(openMenu === "layout" ? null : "layout")}
+        >
           <Grid3X3 className="w-3.5 h-3.5" />
           排列 <ChevronDown className="w-3 h-3" />
-        </ToolbarBtn>
+        </ToolbarButton>
         {openMenu === "layout" && (
           <LayoutMenu
             current={layout}
@@ -226,37 +236,37 @@ export function GroupToolbar() {
         )}
       </div>
 
-      <Sep />
+      <ToolbarSep />
 
       {/* Execute */}
-      <ToolbarBtn onClick={() => setShowExecuteDialog(true)}>
+      <ToolbarButton variant="dark" onClick={() => setShowExecuteDialog(true)}>
         <Play className="w-3.5 h-3.5" />
         整组执行
-      </ToolbarBtn>
+      </ToolbarButton>
 
-      <Sep />
+      <ToolbarSep />
 
       {/* Convert to storyboard */}
-      <ToolbarBtn onClick={() => convertGroupToStoryboard(id)}>
+      <ToolbarButton variant="dark" onClick={() => convertGroupToStoryboard(id)}>
         <ArrowRightLeft className="w-3.5 h-3.5" />
         转分镜组
-      </ToolbarBtn>
+      </ToolbarButton>
 
-      <Sep />
+      <ToolbarSep />
 
       {/* Ungroup */}
-      <ToolbarBtn onClick={() => ungroupGroup(id)}>
+      <ToolbarButton variant="dark" onClick={() => ungroupGroup(id)}>
         <Ungroup className="w-3.5 h-3.5" />
         解组
-      </ToolbarBtn>
+      </ToolbarButton>
 
-      <Sep />
+      <ToolbarSep />
 
       {/* Download */}
-      <ToolbarBtn onClick={handleDownload}>
+      <ToolbarButton variant="dark" onClick={handleDownload}>
         <Download className="w-3.5 h-3.5" />
         下载
-      </ToolbarBtn>
+      </ToolbarButton>
 
       <ExecuteGroupDialog
         open={showExecuteDialog}
@@ -268,60 +278,5 @@ export function GroupToolbar() {
         onCancel={() => setShowExecuteDialog(false)}
       />
     </div>
-  );
-}
-
-/* Dark toolbar button (for normal groups) */
-function ToolbarBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full h-8 px-3 text-[13px] font-medium transition-colors"
-      style={{
-        color: "#F8FAFC",
-        background: "transparent",
-        fontFamily: "PingFang SC, Inter, system-ui",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#334155";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-/* Light toolbar button (for video groups) */
-function VToolbarBtn({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full h-8 px-3 text-[13px] font-medium transition-colors"
-      style={{
-        color: "#334155",
-        background: "transparent",
-        fontFamily: "PingFang SC, Inter, system-ui",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#F8FAFC";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Sep({ light }: { light?: boolean }) {
-  return (
-    <span
-      className="inline-block"
-      style={{ width: 1, height: 18, background: light ? "#E5E7EB" : "#475569" }}
-    />
   );
 }

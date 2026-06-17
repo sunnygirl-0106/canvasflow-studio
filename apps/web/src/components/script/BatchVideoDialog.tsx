@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, ChevronDown, ChevronUp, Loader2, Video } from "lucide-react";
 import type { ScriptShot } from "@/store/types";
+import { useEscape } from "@/lib/useDismiss";
 
 const VIDEO_MODELS = ["Seedance 2.0 VIP", "Seedance 1.0", "Kling 1.5"];
 const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"];
@@ -37,14 +38,7 @@ export function BatchVideoDialog({ open, shots, onConfirm, onCancel }: Props) {
     }
   }, [open, shots]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onCancel]);
+  useEscape(onCancel, open);
 
   if (!open) return null;
 

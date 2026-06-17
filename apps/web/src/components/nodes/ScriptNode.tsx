@@ -1,5 +1,5 @@
 import { Handle, Position, NodeToolbar } from "@xyflow/react";
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   FileText,
   RefreshCw,
@@ -19,6 +19,7 @@ import {
   SCRIPT_MODELS,
   SCRIPT_NODE_WIDTH,
 } from "@/store/canvasStore";
+import { getUpstreamMounts } from "@/store/selectors/upstream";
 import { GenerateStoryboardDialog } from "@/components/script/GenerateStoryboardDialog";
 import { BatchVideoDialog } from "@/components/script/BatchVideoDialog";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
@@ -31,15 +32,22 @@ import {
   ShotThumbnailStrip,
 } from "./ScriptNodeParts";
 
-export function ScriptNode({ id, data }: { id: string; data: ScriptNodeData }) {
+export const ScriptNode = memo(ScriptNodeImpl);
+
+function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
   const script = data.script as ScriptData | undefined;
   const openScript = useCanvas((s) => s.openScript);
   const generateScript = useCanvas((s) => s.generateScript);
   const cancelScript = useCanvas((s) => s.cancelScript);
   const regenerateScript = useCanvas((s) => s.regenerateScript);
   const updateNode = useCanvas((s) => s.updateNode);
-  const edges = useCanvas((s) => s.edges);
+
+  // Subscribe to nodes/edges as stable refs; derive live mounts via useMemo.
+  // A zustand selector that returns a fresh array each call would trip
+  // useSyncExternalStore and infinite-loop.
   const nodes = useCanvas((s) => s.nodes);
+  const edges = useCanvas((s) => s.edges);
+  const upstreamMounts = useMemo(() => getUpstreamMounts({ nodes, edges }, id), [nodes, edges, id]);
 
   const [promptText, setPromptText] = useState(script?.promptText ?? "");
   const [showStoryboardDialog, setShowStoryboardDialog] = useState(false);
@@ -52,12 +60,10 @@ export function ScriptNode({ id, data }: { id: string; data: ScriptNodeData }) {
   const allPromptsDone =
     script.shots.length > 0 && script.shots.every((s) => s.finalPromptStatus === "done");
 
-  // Count connected text nodes
-  const connectedTextCount = edges.filter((e) => {
-    if (e.to !== id) return false;
-    const src = nodes.find((n) => n.id === e.from);
-    return src?.kind === "text" && !!src.data.text?.trim();
-  }).length;
+  const connectedTextMounts = upstreamMounts.filter((m) => m.kind === "text" && !!m.text?.trim());
+  const connectedAssetGroupMounts = upstreamMounts.filter((m) => m.kind === "nodeGroup");
+  const connectedTextCount = connectedTextMounts.length;
+  const totalMountCount = connectedTextCount + connectedAssetGroupMounts.length;
 
   const hasTextInput = connectedTextCount > 0;
   const hasSource = hasTextInput || !!script.sourceText?.trim();
@@ -192,18 +198,23 @@ export function ScriptNode({ id, data }: { id: string; data: ScriptNodeData }) {
           >
             {/* Top row: script badge + shot thumbnails (thumbnails only after wizard complete) */}
             <div className="flex items-center gap-2" style={{ padding: "10px 14px 0" }}>
-              {/* Connected scripts badge */}
-              {connectedTextCount > 0 && (
+              {/* Connected upstream badge — counts text inputs + materialized
+                  asset groups. Hover reveals the source names. */}
+              {totalMountCount > 0 && (
                 <div
                   className="inline-flex items-center justify-center rounded-lg relative flex-shrink-0"
                   style={{ width: 36, height: 36, background: "#F3F4F6" }}
+                  title={[
+                    ...connectedTextMounts.map((m) => `剧本：${m.name}`),
+                    ...connectedAssetGroupMounts.map((m) => `资产组：${m.name}`),
+                  ].join("\n")}
                 >
                   <ListOrdered className="w-4 h-4" style={{ color: "#6B7280" }} strokeWidth={1.8} />
                   <span
                     className="absolute -top-1 -right-1 flex items-center justify-center rounded-full text-white text-[10px] font-bold"
                     style={{ width: 16, height: 16, background: "#6366F1" }}
                   >
-                    {connectedTextCount}
+                    {totalMountCount}
                   </span>
                 </div>
               )}

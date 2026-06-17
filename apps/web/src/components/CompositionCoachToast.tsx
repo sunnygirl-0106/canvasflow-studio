@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { Film, X, ArrowDown } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 
-const STORAGE_KEY = "phanthy:comp-coach-seen";
 const AUTO_HIDE_MS = 16000;
 
 /**
- * First-time coach mark for composition.
- * Triggers once when the user creates their first new composition this session.
- * Permanently dismissable via localStorage.
+ * Coach mark shown every time a new composition node is created.
  */
 export function CompositionCoachToast() {
-  const nodes = useCanvas((s) => s.nodes);
+  // Narrow selector: a number that only changes when a composition is
+  // added/removed — so dragging unrelated nodes no longer re-renders the toast
+  // (was subscribing to the entire nodes array).
+  const compCount = useCanvas((s) =>
+    s.nodes.reduce((c, n) => c + (n.kind === "composition" ? 1 : 0), 0),
+  );
   const seenIdsRef = useRef<Set<string> | null>(null);
   const [visibleFor, setVisibleFor] = useState<string | null>(null);
 
@@ -25,17 +27,17 @@ export function CompositionCoachToast() {
     );
   }
 
-  // Watch for newly-added compositions
+  // Watch for newly-added compositions (fires when the count changes).
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (window.localStorage.getItem(STORAGE_KEY) === "1") return;
     const seen = seenIdsRef.current!;
-    const newComp = nodes.find((n) => n.kind === "composition" && !seen.has(n.id));
+    const newComp = useCanvas
+      .getState()
+      .nodes.find((n) => n.kind === "composition" && !seen.has(n.id));
     if (newComp) {
       seen.add(newComp.id);
       setVisibleFor(newComp.id);
     }
-  }, [nodes]);
+  }, [compCount]);
 
   // Auto-hide after timeout
   useEffect(() => {
@@ -47,14 +49,6 @@ export function CompositionCoachToast() {
   if (!visibleFor) return null;
 
   const dismissOnce = () => setVisibleFor(null);
-  const dismissForever = () => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      /* ignore */
-    }
-    setVisibleFor(null);
-  };
 
   return (
     <div
@@ -113,7 +107,7 @@ export function CompositionCoachToast() {
           </div>
           <div className="flex items-center gap-3 mt-3">
             <button
-              onClick={dismissForever}
+              onClick={dismissOnce}
               className="text-[12px] font-semibold rounded-full px-3 py-1"
               style={{
                 background: "linear-gradient(135deg, #0F766E 0%, #14B8A6 100%)",
@@ -122,13 +116,6 @@ export function CompositionCoachToast() {
               }}
             >
               知道了
-            </button>
-            <button
-              onClick={dismissOnce}
-              className="text-[12px] font-medium"
-              style={{ color: "#94A3B8", fontFamily: "PingFang SC, Inter, system-ui" }}
-            >
-              稍后再看
             </button>
           </div>
         </div>

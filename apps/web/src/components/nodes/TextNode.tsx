@@ -1,9 +1,12 @@
 import { Handle, Position } from "@xyflow/react";
+import { memo } from "react";
 import { FileText } from "lucide-react";
 import { useCanvas, type TextNodeData, type CanvasNode } from "@/store/canvasStore";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
 
-export function TextNode({ id, data }: { id: string; data: TextNodeData }) {
+export const TextNode = memo(TextNodeImpl);
+
+function TextNodeImpl({ id, data }: { id: string; data: TextNodeData }) {
   const updateNode = useCanvas((s) => s.updateNode);
 
   return (

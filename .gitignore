@@ -9,6 +9,10 @@ package-lock.json
 
 # Data
 data/
+*.backup.*.json
+
+# Scratch / temp files
+_tmp_*
 
 # Environment (secrets)
 .env

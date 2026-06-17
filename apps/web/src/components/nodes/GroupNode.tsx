@@ -1,16 +1,78 @@
 import { Handle, Position } from "@xyflow/react";
+import { memo, useMemo } from "react";
 import { FolderOpen, Loader2, Play } from "lucide-react";
-import type { GroupNodeData } from "@/store/canvasStore";
+import { useCanvas, type CanvasNode, type GroupNodeData, type NodeKind } from "@/store/canvasStore";
 
-export function GroupNode({ data }: { id: string; data: GroupNodeData }) {
+// Per refactor 改动 4: the group never stores a snapshot src. The renderer
+// resolves each member id to a live source on every render so regenerating
+// the source image immediately propagates to the group thumbnail.
+//
+// Resolution order for a member id:
+//   1. A canvas node with that id → use its current data.src.
+//   2. A script node whose `script.assets[]` contains that id → use the
+//      asset's current image. (Asset groups materialized by closeScript
+//      reference asset ids, not real canvas nodes.)
+//   3. Fall back to the persisted `members[]` entry for name only — never
+//      render its src (would be a stale snapshot from before the refactor).
+interface ResolvedMember {
+  id: string;
+  kind: NodeKind;
+  name?: string;
+  src?: string;
+}
+
+function resolveMember(
+  id: string,
+  nodes: CanvasNode[],
+  membersFallback: GroupNodeData["members"],
+): ResolvedMember {
+  const node = nodes.find((n) => n.id === id);
+  if (node) {
+    const src = "src" in node.data ? (node.data as { src?: string }).src : undefined;
+    return {
+      id,
+      kind: node.kind,
+      name: (node.data as { name?: string }).name,
+      src,
+    };
+  }
+  for (const n of nodes) {
+    if (n.kind !== "script") continue;
+    const asset = n.data.script.assets?.find((a) => a.id === id);
+    if (asset) {
+      return { id, kind: "image", name: asset.name, src: asset.image };
+    }
+  }
+  const fallback = membersFallback.find((m) => m.id === id);
+  return { id, kind: fallback?.kind ?? "image", name: fallback?.name };
+}
+
+export const GroupNode = memo(GroupNodeImpl);
+
+function GroupNodeImpl({ data }: { id: string; data: GroupNodeData }) {
+  const nodes = useCanvas((s) => s.nodes);
+
   const color = data.groupColor ?? "#56C7CF";
   const w = data.groupWidth ?? 300;
   const h = data.groupHeight ?? 200;
-  const members = data.members ?? [];
   const executing = data.executing ?? false;
-  const isVideoGroup = members.length > 0 && members.every((m) => m.kind === "generateVideo");
+
+  const members = useMemo<ResolvedMember[]>(
+    () => data.memberIds.map((id) => resolveMember(id, nodes, data.members ?? [])),
+    [data.memberIds, data.members, nodes],
+  );
+
+  // `frame` groups (e.g. asset groups) wrap REAL member nodes that render
+  // themselves on the canvas, so the group is only a labelled dashed container
+  // — never a thumbnail card, which would double-render the same images.
+  const frameOnly = data.frame === true;
+  const isVideoGroup =
+    !frameOnly && members.length > 0 && members.every((m) => m.kind === "generateVideo");
   const isImageGroup =
-    !isVideoGroup && members.length > 0 && members.every((m) => m.kind === "image" && m.src);
+    !frameOnly &&
+    !isVideoGroup &&
+    members.length > 0 &&
+    members.every((m) => m.kind === "image" && !!m.src);
 
   return (
     <div

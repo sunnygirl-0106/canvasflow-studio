@@ -1,5 +1,6 @@
 import { generateScript as apiGenerateScript } from "@/services/api";
 import { autoGrid, fillCells } from "@/lib/storyboard";
+import { gridCell } from "@/lib/gridLayout";
 import { extractAssetsFromShots } from "@/lib/assetUtils";
 import {
   type CanvasNode,
@@ -21,6 +22,24 @@ import {
 // ── Script helpers ────────────────────────────────────────────────────────────
 
 const scriptAbortMap = new Map<string, AbortController>();
+// Live mock-progress timers keyed by script id, so we can cancel them when the
+// script editor closes or a new run starts — otherwise the interval keeps
+// calling set() against a closed/removed script (memory + state leak).
+const composeTimers = new Map<string, ReturnType<typeof setInterval>>();
+const assetGenTimers = new Map<string, ReturnType<typeof setInterval>>();
+
+function clearScriptTimers(id: string) {
+  const ct = composeTimers.get(id);
+  if (ct) {
+    clearInterval(ct);
+    composeTimers.delete(id);
+  }
+  const at = assetGenTimers.get(id);
+  if (at) {
+    clearInterval(at);
+    assetGenTimers.delete(id);
+  }
+}
 
 function patchScriptData(
   nodes: CanvasNode[],
@@ -75,6 +94,7 @@ export function createScriptSlice(set: SetState, get: GetState) {
       if (id) {
         scriptAbortMap.get(id)?.abort();
         scriptAbortMap.delete(id);
+        clearScriptTimers(id);
         get().materializeAssetGroups(id);
       }
       set({ editorScriptId: null });
@@ -106,18 +126,22 @@ export function createScriptSlice(set: SetState, get: GetState) {
             set((s) => ({ nodes: patchScriptShots(s.nodes, id, (arr) => [...arr, shot]) })),
           onProgress: (percent) =>
             set((s) => ({ nodes: patchScriptData(s.nodes, id, { progress: percent }) })),
-          onDone: () =>
+          onDone: () => {
+            scriptAbortMap.delete(id);
             set((s) => ({
               nodes: patchScriptData(s.nodes, id, { status: "ready", progress: undefined }),
-            })),
-          onError: (err) =>
+            }));
+          },
+          onError: (err) => {
+            scriptAbortMap.delete(id);
             set((s) => ({
               nodes: patchScriptData(s.nodes, id, {
                 status: "failed",
                 error: err.message,
                 progress: undefined,
               }),
-            })),
+            }));
+          },
           signal: controller.signal,
         },
       );
@@ -137,19 +161,24 @@ export function createScriptSlice(set: SetState, get: GetState) {
       get().generateScript(id);
     },
 
-    updateScriptShot: (id: string, shotId: string, patch: Partial<ScriptShot>) =>
+    updateScriptShot: (id: string, shotId: string, patch: Partial<ScriptShot>) => {
+      // Table/card cells commit on blur (once per edit), so one history entry
+      // per field change — not per keystroke.
+      get().pushHistory();
       set((s) => ({
         nodes: patchScriptShots(s.nodes, id, (shots) =>
           shots.map((sh) => (sh.id === shotId ? { ...sh, ...patch } : sh)),
         ),
-      })),
+      }));
+    },
 
     updateScriptCharacter: (
       id: string,
       shotId: string,
       charId: string,
       patch: Partial<ScriptCharacter>,
-    ) =>
+    ) => {
+      get().pushHistory();
       set((s) => ({
         nodes: patchScriptShots(s.nodes, id, (shots) =>
           shots.map((sh) =>
@@ -161,14 +190,16 @@ export function createScriptSlice(set: SetState, get: GetState) {
                 },
           ),
         ),
-      })),
+      }));
+    },
 
     setScriptImage: (
       id: string,
       shotId: string,
       target: { kind: "ref" } | { kind: "character"; charId: string },
       src: string,
-    ) =>
+    ) => {
+      get().pushHistory();
       set((s) => ({
         nodes: patchScriptShots(s.nodes, id, (shots) =>
           shots.map((sh) => {
@@ -182,13 +213,15 @@ export function createScriptSlice(set: SetState, get: GetState) {
             };
           }),
         ),
-      })),
+      }));
+    },
 
     removeScriptImage: (
       id: string,
       shotId: string,
       target: { kind: "ref" } | { kind: "character"; charId: string },
-    ) =>
+    ) => {
+      get().pushHistory();
       set((s) => ({
         nodes: patchScriptShots(s.nodes, id, (shots) =>
           shots.map((sh) => {
@@ -202,7 +235,8 @@ export function createScriptSlice(set: SetState, get: GetState) {
             };
           }),
         ),
-      })),
+      }));
+    },
 
     removeScriptShot: (id: string, shotId: string) => {
       get().pushHistory();
@@ -243,10 +277,12 @@ export function createScriptSlice(set: SetState, get: GetState) {
       const ts = Date.now();
       const filledCells = sb.cells.filter((c) => c.src);
 
-      const members = filledCells.map((cell, i) => ({
+      // `src` not stored on members — once the corresponding generateVideo
+      // node materializes, GroupNode reads its live src. Until then the cards
+      // render as empty placeholders (matches the "not yet generated" state).
+      const members = filledCells.map((_cell, i) => ({
         id: `vid-sb-${ts}-${i}`,
         kind: "generateVideo" as NodeKind,
-        src: cell.src,
         name: `分镜视频-#${i + 1}`,
       }));
 
@@ -313,7 +349,6 @@ export function createScriptSlice(set: SetState, get: GetState) {
       const members = selectedShots.map((shot, i) => ({
         id: `vid-script-${ts}-${i}`,
         kind: "generateVideo" as NodeKind,
-        src: undefined as string | undefined,
         name: `分镜视频-#${shot.index}`,
         duration: opts.durations[shot.id] ?? shot.duration,
       }));
@@ -399,11 +434,16 @@ export function createScriptSlice(set: SetState, get: GetState) {
         ),
       }));
 
+      // Cancel any in-flight compose for this script before (re)starting.
+      const prev = composeTimers.get(id);
+      if (prev) clearInterval(prev);
+
       // Simulate progressive composition ~500ms per shot
       let i = 0;
       const timer = setInterval(() => {
         if (i >= shotIds.length) {
           clearInterval(timer);
+          composeTimers.delete(id);
           return;
         }
         const shotId = shotIds[i];
@@ -420,34 +460,44 @@ export function createScriptSlice(set: SetState, get: GetState) {
         }));
         i++;
       }, 500);
+      composeTimers.set(id, timer);
     },
 
     extractAssets: (id: string) => {
       const script = getScriptData(get().nodes, id);
       if (!script) return;
+      get().pushHistory();
       const assets = extractAssetsFromShots(script.shots);
       set((s) => ({ nodes: patchScriptData(s.nodes, id, { assets }) }));
     },
 
-    addAsset: (id: string, asset: ScriptAsset) =>
+    addAsset: (id: string, asset: ScriptAsset) => {
+      get().pushHistory();
       set((s) => {
         const assets = [...(getScriptData(s.nodes, id)?.assets ?? []), asset];
         return { nodes: patchScriptData(s.nodes, id, { assets }) };
-      }),
+      });
+    },
 
-    updateAsset: (id: string, assetId: string, patch: Partial<ScriptAsset>) =>
+    updateAsset: (id: string, assetId: string, patch: Partial<ScriptAsset>) => {
       set((s) => {
         const assets = (getScriptData(s.nodes, id)?.assets ?? []).map((a) =>
           a.id === assetId ? { ...a, ...patch } : a,
         );
         return { nodes: patchScriptData(s.nodes, id, { assets }) };
-      }),
+      });
+      // Keep the materialized asset node's image/name in sync with edits.
+      if ("image" in patch || "name" in patch) get().materializeAssetGroups(id);
+    },
 
-    removeAsset: (id: string, assetId: string) =>
+    removeAsset: (id: string, assetId: string) => {
       set((s) => {
         const assets = (getScriptData(s.nodes, id)?.assets ?? []).filter((a) => a.id !== assetId);
         return { nodes: patchScriptData(s.nodes, id, { assets }) };
-      }),
+      });
+      // Drop the corresponding materialized node from the asset group.
+      get().materializeAssetGroups(id);
+    },
 
     generateAssets: (id: string, assetIds: string[]) => {
       // Mark all as generating
@@ -459,6 +509,10 @@ export function createScriptSlice(set: SetState, get: GetState) {
         );
         return { nodes: patchScriptData(s.nodes, id, { assets }) };
       });
+
+      // Cancel any in-flight asset generation for this script before restarting.
+      const prevTimer = assetGenTimers.get(id);
+      if (prevTimer) clearInterval(prevTimer);
 
       // Simulate progress for each asset
       let tick = 0;
@@ -480,8 +534,14 @@ export function createScriptSlice(set: SetState, get: GetState) {
           });
           return { nodes: patchScriptData(s.nodes, id, { assets }) };
         });
-        if (progress >= 100) clearInterval(timer);
+        if (progress >= 100) {
+          clearInterval(timer);
+          assetGenTimers.delete(id);
+          // Mount as soon as the images exist — no need to close the editor.
+          get().materializeAssetGroups(id);
+        }
       }, 400);
+      assetGenTimers.set(id, timer);
     },
 
     cancelAssetGeneration: (id: string, assetId: string) =>
@@ -492,54 +552,144 @@ export function createScriptSlice(set: SetState, get: GetState) {
         return { nodes: patchScriptData(s.nodes, id, { assets }) };
       }),
 
+    // Idempotent reconcile: materialize every generated asset into a REAL
+    // `image` canvas node, wrap them in a dashed-frame "资产组" on the script's
+    // left (upstream), and keep all of it in sync with `script.assets[]`.
+    //
+    // - Real nodes (not virtual refs): they render exactly like 图片N nodes,
+    //   survive ungrouping, and can be dragged/edited independently.
+    // - Live sync: re-running it after a regenerate refreshes each node's src.
+    // - Self-healing: safe to call on load, on generate, on asset edit/remove,
+    //   and on editor close — it converges to the same result every time.
+    //
+    // Stable ids (derived from scriptId) make the reconcile deterministic and
+    // avoid the old one-shot `assetGroupsMaterialized` latch that left the
+    // canvas stuck with no group after an ungroup.
     materializeAssetGroups: (scriptId: string) => {
       const { nodes } = get();
       const scriptNode = nodes.find((n) => n.id === scriptId);
       if (!scriptNode || scriptNode.kind !== "script") return;
       const script = scriptNode.data.script;
-      if (script.assetGroupsMaterialized) return;
+      // Respect a deliberate ungroup: once detached we don't auto-rebuild.
+      if (script.assetGroupDetached) return;
+
+      const groupId = `asset-group-${scriptId}`;
+      const edgeId = `edge-asset-${scriptId}`;
+      const nodeIdFor = (assetId: string) => `assetimg-${scriptId}-${assetId}`;
 
       const assetsWithImage = (script.assets ?? []).filter((a) => a.image);
-      if (assetsWithImage.length === 0) return;
 
-      const ts = Date.now();
-      const groupId = `asset-group-${ts}`;
-      const members = assetsWithImage.map((a) => ({
-        id: a.id,
-        kind: "image" as NodeKind,
-        src: a.image,
-        name: a.name,
-      }));
+      // Grid layout (2 columns) to the LEFT of the script node.
+      const NODE_W = 420;
+      const NODE_H = 300;
+      const GAP = 40;
+      const PAD = 32;
+      const HEADER = 44;
+      const cols = Math.max(1, Math.min(assetsWithImage.length || 1, 2));
+      const rows = Math.max(1, Math.ceil(assetsWithImage.length / cols));
+      const gridW = cols * NODE_W + (cols - 1) * GAP;
+      const gridH = rows * NODE_H + (rows - 1) * GAP;
+      const groupW = gridW + PAD * 2;
+      const groupH = gridH + PAD * 2 + HEADER;
+      const groupX = scriptNode.x - groupW - 120;
+      const groupY = scriptNode.y;
+      const baseX = groupX + PAD;
+      const baseY = groupY + PAD + HEADER;
 
-      const groupNode: CanvasNode = {
-        id: groupId,
-        kind: "nodeGroup",
-        x: scriptNode.x - 400,
-        y: scriptNode.y,
-        data: {
-          name: `资产组 · ${script.title}`,
-          memberIds: members.map((m) => m.id),
-          members,
-          groupColor: "#6366F1",
-          groupLayout: "grid",
-        },
-      };
+      set((s) => {
+        // 1. Drop the group node, its edge, and any stale asset nodes for this
+        //    script — we rebuild from script.assets as the single source.
+        const wantedNodeIds = new Set(assetsWithImage.map((a) => nodeIdFor(a.id)));
+        let nextNodes = s.nodes.filter((n) => {
+          if (n.id === groupId) return false;
+          if (n.kind === "image" && n.data.assetScriptId === scriptId) {
+            return wantedNodeIds.has(n.id); // keep nodes still backed by an asset
+          }
+          return true;
+        });
 
-      const edge: Edge = {
-        id: `edge-asset-${ts}`,
-        from: groupId,
-        to: scriptId,
-        sourceHandle: "group-out",
-        toHandle: "in",
-      };
+        // 2. Upsert a real image node per asset. Preserve a node's existing
+        //    position (user may have moved it) and only refresh src/name.
+        //    Index by id once to avoid O(assets × nodes) nested scans.
+        const nextById = new Map(nextNodes.map((n) => [n.id, n]));
+        const assetNodes: CanvasNode[] = assetsWithImage.map((a, i) => {
+          const id = nodeIdFor(a.id);
+          const existing = nextById.get(id);
+          const cell = gridCell(i, cols, {
+            baseX,
+            baseY,
+            cellW: NODE_W,
+            cellH: NODE_H,
+            gapX: GAP,
+            gapY: GAP,
+          });
+          return {
+            id,
+            kind: "image",
+            x: existing ? existing.x : cell.x,
+            y: existing ? existing.y : cell.y,
+            data: {
+              name: a.name,
+              src: a.image,
+              status: "ready",
+              assetScriptId: scriptId,
+              assetId: a.id,
+            },
+          };
+        });
+        const assetById = new Map(assetNodes.map((an) => [an.id, an]));
+        nextNodes = nextNodes.map((n) => assetById.get(n.id) ?? n);
+        const presentIds = new Set(nextNodes.map((n) => n.id));
+        for (const an of assetNodes) {
+          if (!presentIds.has(an.id)) nextNodes.push(an);
+        }
 
-      set((s) => ({
-        nodes: [
-          ...patchScriptData(s.nodes, scriptId, { assetGroupsMaterialized: true }),
-          groupNode,
-        ],
-        edges: [...s.edges, edge],
-      }));
+        // 3. No generated assets → leave nothing mounted.
+        if (assetNodes.length === 0) {
+          return {
+            nodes: nextNodes,
+            edges: s.edges.filter((e) => e.id !== edgeId),
+          };
+        }
+
+        // 4. Upsert the dashed-frame group container in front (renders behind
+        //    its members, which sit at higher array order).
+        const existingGroup = s.nodes.find((n) => n.id === groupId);
+        const groupNode: CanvasNode = {
+          id: groupId,
+          kind: "nodeGroup",
+          x: existingGroup ? existingGroup.x : groupX,
+          y: existingGroup ? existingGroup.y : groupY,
+          data: {
+            name: `资产组 · ${script.title || "脚本"}`,
+            memberIds: assetNodes.map((n) => n.id),
+            members: assetNodes.map((n) => ({
+              id: n.id,
+              kind: "image" as NodeKind,
+              name: n.data.name,
+            })),
+            groupColor: "#6366F1",
+            groupLayout: "grid",
+            frame: true,
+            sourceScriptId: scriptId,
+            groupWidth: groupW,
+            groupHeight: groupH,
+          },
+        };
+
+        const edge: Edge = {
+          id: edgeId,
+          from: groupId,
+          to: scriptId,
+          sourceHandle: "group-out",
+          toHandle: "in",
+        };
+
+        return {
+          nodes: [groupNode, ...nextNodes],
+          edges: s.edges.some((e) => e.id === edgeId) ? s.edges : [...s.edges, edge],
+        };
+      });
     },
 
     generateStoryboardFromScript: (scriptId: string, shotIds: string[]) => {

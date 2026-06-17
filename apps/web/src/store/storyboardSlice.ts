@@ -179,10 +179,10 @@ export function createStoryboardSlice(set: SetState, get: GetState) {
         data: {
           name: sbNode.data.name ?? "普通组",
           memberIds: newImageNodes.map((n) => n.id),
+          // `src` omitted — renderer reads live from member nodes.
           members: newImageNodes.map((n) => ({
             id: n.id,
             kind: n.kind as NodeKind,
-            src: n.data.src,
             name: n.data.name,
           })),
           groupColor: "#56C7CF",

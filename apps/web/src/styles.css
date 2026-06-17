@@ -36,7 +36,7 @@
 
 :root {
   --radius: 0.75rem;
-  --background: #F8FAFC;
+  --background: #1A1C20;
   --foreground: #101828;
   --card: #FFFFFF;
   --card-foreground: #101828;
@@ -73,7 +73,7 @@
 }
 
 .canvas-bg {
-  background-color: #F8FAFC;
+  background-color: #1A1C20;
 }
 
 .frosted {
@@ -142,23 +142,40 @@
 .react-flow__node-nodeGroup.selectable:hover {
   box-shadow: none !important;
 }
+/* Connection handles render as a small outlined "+" pill on every node.
+   Using !important here so per-node inline color overrides don't bleed
+   through — the unified look is intentional. The ::after rule paints the
+   plus glyph and is pointer-events:none so it doesn't swallow drag-to-
+   connect events on the underlying handle div. */
 .react-flow__handle {
-  background: var(--color-accent);
-  border: none;
-}
-.react-flow__handle-left {
-  width: 12px !important;
-  height: 12px !important;
+  width: 22px !important;
+  height: 22px !important;
   border-radius: 50% !important;
+  background: transparent !important;
+  border: 1.5px solid #E5E7EB !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.react-flow__handle::after {
+  content: "+";
+  color: #E5E7EB;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  pointer-events: none;
+}
+/* Position the pill fully outside the node body so its plus glyph is
+   never half-clipped by an inner overflow:hidden. A small gap keeps it
+   visually disconnected from the node edge. */
+.react-flow__handle-left {
   left: 0 !important;
-  transform: translate(-50%, -50%) !important;
+  transform: translate(calc(-100% - 6px), -50%) !important;
 }
 .react-flow__handle-right {
-  width: 12px !important;
-  height: 12px !important;
-  border-radius: 50% !important;
   right: 0 !important;
-  transform: translate(50%, -50%) !important;
+  transform: translate(calc(100% + 6px), -50%) !important;
 }
 .react-flow__edge-path { stroke: #56C7CF; stroke-width: 2; }
 .react-flow__edge.selected .react-flow__edge-path { stroke: #111827; }

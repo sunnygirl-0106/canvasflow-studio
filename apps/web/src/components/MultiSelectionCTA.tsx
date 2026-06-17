@@ -40,6 +40,7 @@ export function MultiSelectionCTA() {
   if (selectedMedia.length < 2) return null;
 
   const ids = selectedMedia.map((n) => n.id);
+  const canGroup = selectedMedia.every((n) => n.type === "image" || n.type === "generateImage");
 
   const handleMergeComposition = () => {
     merge(ids);
@@ -104,53 +105,55 @@ export function MultiSelectionCTA() {
           </span>
         </button>
 
-        {/* Group dropdown */}
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setDropdownOpen((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-full h-8 px-3 transition-colors hover:bg-slate-100"
-            style={{
-              border: "1px solid #E5E7EB",
-              color: "#0F172A",
-            }}
-          >
-            <span
-              className="text-[13px] font-semibold"
-              style={{ fontFamily: "PingFang SC, Inter, system-ui" }}
-            >
-              打组
-            </span>
-            <ChevronDown className="w-3.5 h-3.5" strokeWidth={2.2} />
-          </button>
-          {dropdownOpen && (
-            <div
-              className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50"
+        {canGroup && (
+          /* Group dropdown — only when all selected are images */
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen((v) => !v)}
+              className="inline-flex items-center gap-1 rounded-full h-8 px-3 transition-colors hover:bg-slate-100"
               style={{
-                minWidth: 160,
-                background: "#FFFFFF",
                 border: "1px solid #E5E7EB",
-                boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+                color: "#0F172A",
               }}
             >
-              <button
-                onClick={handleCreateGroup}
-                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium hover:bg-slate-50 transition-colors"
-                style={{ color: "#0F172A", fontFamily: "PingFang SC, Inter, system-ui" }}
+              <span
+                className="text-[13px] font-semibold"
+                style={{ fontFamily: "PingFang SC, Inter, system-ui" }}
               >
-                <FolderOpen className="w-4 h-4" style={{ color: "#56C7CF" }} strokeWidth={1.8} />
                 打组
-              </button>
-              <button
-                onClick={handleMergeStoryboard}
-                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium hover:bg-slate-50 transition-colors"
-                style={{ color: "#0F172A", fontFamily: "PingFang SC, Inter, system-ui" }}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5" strokeWidth={2.2} />
+            </button>
+            {dropdownOpen && (
+              <div
+                className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50"
+                style={{
+                  minWidth: 160,
+                  background: "#FFFFFF",
+                  border: "1px solid #E5E7EB",
+                  boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+                }}
               >
-                <Grid3X3 className="w-4 h-4" style={{ color: "#14B8A6" }} strokeWidth={1.8} />
-                合并分镜组
-              </button>
-            </div>
-          )}
-        </div>
+                <button
+                  onClick={handleCreateGroup}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium hover:bg-slate-50 transition-colors"
+                  style={{ color: "#0F172A", fontFamily: "PingFang SC, Inter, system-ui" }}
+                >
+                  <FolderOpen className="w-4 h-4" style={{ color: "#56C7CF" }} strokeWidth={1.8} />
+                  打组
+                </button>
+                <button
+                  onClick={handleMergeStoryboard}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium hover:bg-slate-50 transition-colors"
+                  style={{ color: "#0F172A", fontFamily: "PingFang SC, Inter, system-ui" }}
+                >
+                  <Grid3X3 className="w-4 h-4" style={{ color: "#14B8A6" }} strokeWidth={1.8} />
+                  合并分镜组
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           onClick={() => setSelectedMedia([])}
