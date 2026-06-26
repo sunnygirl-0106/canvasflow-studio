@@ -1,4 +1,5 @@
 import { STORYBOARD_RATIOS, type AspectRatio } from "@/store/canvasStore";
+import { MenuPanel, MenuItem } from "@/components/ui/Menu";
 
 interface RatioMenuProps {
   current: AspectRatio;
@@ -8,27 +9,14 @@ interface RatioMenuProps {
 
 export function RatioMenu({ current, onSelect, onClose }: RatioMenuProps) {
   return (
-    <div
-      className="absolute top-full left-0 mt-1 rounded-lg overflow-hidden z-50"
-      style={{
-        minWidth: 120,
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-      }}
-    >
+    <MenuPanel>
       {STORYBOARD_RATIOS.map((r) => (
-        <button
+        <MenuItem
           key={r}
+          active={r === current}
           onClick={() => {
             onSelect(r);
             onClose();
-          }}
-          className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium hover:bg-slate-50 transition-colors"
-          style={{
-            color: r === current ? "#0F766E" : "#0F172A",
-            fontFamily: "Inter, system-ui",
-            fontWeight: r === current ? 700 : 500,
           }}
         >
           {r}
@@ -37,8 +25,8 @@ export function RatioMenu({ current, onSelect, onClose }: RatioMenuProps) {
               ✓
             </span>
           )}
-        </button>
+        </MenuItem>
       ))}
-    </div>
+    </MenuPanel>
   );
 }

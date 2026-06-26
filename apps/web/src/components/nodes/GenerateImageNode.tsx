@@ -1,4 +1,5 @@
 import { Handle, NodeToolbar, Position } from "@xyflow/react";
+import { DemoImg } from "@/components/DemoImg";
 import { memo, useRef } from "react";
 import { ImageIcon, Upload, Loader2, Eye } from "lucide-react";
 import {
@@ -9,6 +10,9 @@ import {
 } from "@/store/canvasStore";
 import { ImagePromptPanel } from "@/components/ImagePromptPanel";
 import { ImageToolbar } from "@/components/ImageToolbar";
+import { useStoryboardMembership } from "@/lib/useStoryboardMembership";
+import { useIsMultiSelected } from "@/lib/useIsMultiSelected";
+import { ShotIndexBadge } from "./ShotIndexBadge";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
 
 type Data = GenerateImageNodeData | ImageNodeData;
@@ -30,8 +34,17 @@ function GenerateImageNodeImpl({
   const updateNode = useCanvas((s) => s.updateNode);
   const fileRef = useRef<HTMLInputElement>(null);
   const status = data.status ?? (data.src ? "ready" : "empty");
+  const slot = useStoryboardMembership(id);
+  // During a multi-select, suppress this node's own toolbar + prompt panel so
+  // the box-selection stays clean and only the shared action bar shows.
+  const multiSelected = useIsMultiSelected();
+  const soloSelected = !!selected && !multiSelected;
 
   const onUploadClick = () => fileRef.current?.click();
+
+  // A storyboard member renders at its FULL size (no thumbnail shrink) — the
+  // container only repositions it. The shot-index badge is the only storyboard-
+  // specific chrome, overlaid below.
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,6 +70,8 @@ function GenerateImageNodeImpl({
       }}
     >
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+
+      {slot?.showIndex && <ShotIndexBadge label={slot.label} />}
 
       {/* Header row above body */}
       <div
@@ -146,7 +161,7 @@ function GenerateImageNodeImpl({
 
           {status === "ready" && data.src && (
             <>
-              <img src={data.src} alt="" className="w-full h-full object-cover" draggable={false} />
+              <DemoImg src={data.src} alt="" className="w-full h-full object-cover" draggable={false} />
               <div
                 className="absolute"
                 style={{
@@ -172,7 +187,11 @@ function GenerateImageNodeImpl({
       </div>
 
       {/* Floating toolbar above (only on selected + ready) */}
-      <NodeToolbar position={Position.Top} offset={16} isVisible={!!selected && status === "ready"}>
+      <NodeToolbar
+        position={Position.Top}
+        offset={16}
+        isVisible={soloSelected && status === "ready"}
+      >
         <ImageToolbar src={data.src} />
       </NodeToolbar>
 
@@ -180,7 +199,7 @@ function GenerateImageNodeImpl({
           Rendered inline so it inherits the viewport zoom transform, instead
           of NodeToolbar which positions in screen-space and stays a fixed
           size as the user zooms. */}
-      {selected && (
+      {soloSelected && (
         <div
           className="nodrag nowheel"
           style={{

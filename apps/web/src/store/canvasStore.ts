@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { placeholderImage } from "@canvasflow/shared";
 import { initialNodes, initialEdges } from "@/data/mockData";
 import { loadProject, saveProject } from "@/services/api";
 import {
@@ -15,6 +16,7 @@ import { createCompositionSlice } from "./compositionSlice";
 import { createStoryboardSlice } from "./storyboardSlice";
 import { createGroupSlice } from "./groupSlice";
 import { createScriptSlice } from "./scriptSlice";
+import { storyboardMemberPos, sortNodesContainerFirst } from "@/lib/container";
 
 // Re-export everything from types so existing component imports keep working.
 // NOTE: `export *` skips names that are locally imported, so we must explicitly
@@ -44,7 +46,7 @@ function createNodeByKind(
         y,
         data: {
           name,
-          src: `https://picsum.photos/seed/${seed}/400/225`,
+          src: placeholderImage(seed, 400, 225),
           status: "ready",
           model: "phan-nano-l",
         },
@@ -102,11 +104,13 @@ function createNodeByKind(
         y,
         data: {
           name,
-          storyboard: { rows: 0, cols: 0, ratio: "16:9", showIndex: false, cells: [] },
+          storyboard: { rows: 0, cols: 0, ratio: "16:9", showIndex: false, memberIds: [] },
         },
       };
     case "text":
       return { id, kind, x, y, data: { name, text: "" } };
+    case "director":
+      return { id, kind, x, y, data: { name } };
     case "script":
       return {
         id,
@@ -146,8 +150,8 @@ function getNodeTracks(n: CanvasNode) {
 // ── Sanitise transient states after reload ───────────────────────────────────
 // No background task survives a page refresh, so "in-progress" states are stale.
 
-function sanitizeNodes(nodes: CanvasNode[]): CanvasNode[] {
-  return nodes.map((n) => {
+function sanitizeNodes(rawNodes: CanvasNode[]): CanvasNode[] {
+  const fixed = rawNodes.map((n) => {
     if (n.kind === "image" || n.kind === "generateImage") {
       const status = n.data.status ?? (n.data.src ? "ready" : "empty");
       const fixed = status === "generating" ? "empty" : status;
@@ -234,6 +238,121 @@ function sanitizeNodes(nodes: CanvasNode[]): CanvasNode[] {
     }
     return n;
   });
+  return resnapStoryboards(migrateStoryboards(fixed));
+}
+
+// ── Re-snap storyboard members to their slots on load ───────────────────────
+// Members are grid-locked, so their canvas position is always derived from the
+// container geometry. Persisted saves may carry stale positions (e.g. from an
+// older layout constant) — re-derive them so members align exactly with the
+// container's grid cells and never overlap.
+function resnapStoryboards(nodes: CanvasNode[]): CanvasNode[] {
+  const liveIds = new Set(nodes.map((n) => n.id));
+  // Drop dangling member references (members deleted while still referenced by
+  // an older build) so the "n 个节点" count reflects真实的 live members. Returns
+  // the (possibly trimmed) memberIds for a storyboard.
+  const cleanMembers = (ids: string[]) => ids.filter((mid) => liveIds.has(mid));
+
+  const pos = new Map<string, { x: number; y: number }>();
+  const cleanedById = new Map<string, string[]>();
+  for (const n of nodes) {
+    if (n.kind !== "storyboard") continue;
+    const sb = n.data.storyboard;
+    const cleaned = cleanMembers(sb.memberIds);
+    cleanedById.set(n.id, cleaned);
+    cleaned.forEach((mid, i) => {
+      pos.set(mid, storyboardMemberPos(n.x, n.y, i, sb.cols, sb.ratio));
+    });
+  }
+  if (cleanedById.size === 0) return nodes;
+  return nodes.map((n) => {
+    if (n.kind === "storyboard") {
+      const cleaned = cleanedById.get(n.id);
+      const sb = n.data.storyboard;
+      if (cleaned && cleaned.length !== sb.memberIds.length) {
+        const keep = new Set(cleaned);
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            storyboard: {
+              ...sb,
+              memberIds: cleaned,
+              members: sb.members?.filter((m) => keep.has(m.id)),
+            },
+          },
+        } as CanvasNode;
+      }
+      return n;
+    }
+    const p = pos.get(n.id);
+    return p ? { ...n, x: p.x, y: p.y } : n;
+  });
+}
+
+// ── Migrate legacy virtual-cell storyboards → real-node containers ───────────
+// Old saves stored grid contents in `storyboard.cells[]` and DELETED the source
+// nodes. The new model keeps members as real nodes referenced by `memberIds`.
+// For each legacy storyboard: reuse the source node if it still exists (and snap
+// it into its slot), otherwise rebuild a real image node from the cell's src.
+// Idempotent: storyboards already on `memberIds` are skipped.
+function migrateStoryboards(nodes: CanvasNode[]): CanvasNode[] {
+  const needsMigration = nodes.some(
+    (n) =>
+      n.kind === "storyboard" &&
+      n.data.storyboard.cells != null &&
+      (n.data.storyboard.memberIds?.length ?? 0) === 0,
+  );
+  if (!needsMigration) return nodes;
+
+  const existingById = new Map(nodes.map((n) => [n.id, n]));
+  const newNodes: CanvasNode[] = [];
+  const repositioned = new Map<string, { x: number; y: number }>();
+  let seq = 0;
+
+  const migrated = nodes.map((n) => {
+    if (n.kind !== "storyboard") return n;
+    const sb = n.data.storyboard;
+    if (sb.cells == null || (sb.memberIds?.length ?? 0) > 0) return n;
+
+    const filled = sb.cells.filter((c) => c.src);
+    const memberIds: string[] = [];
+    const members: { id: string; kind: NodeKind; name?: string }[] = [];
+
+    filled.forEach((c, i) => {
+      const pos = storyboardMemberPos(n.x, n.y, i, sb.cols, sb.ratio);
+      let memberId: string;
+      let kind: NodeKind = "image";
+      const existing = c.sourceNodeId ? existingById.get(c.sourceNodeId) : undefined;
+      if (existing) {
+        memberId = existing.id;
+        kind = existing.kind;
+        repositioned.set(memberId, pos);
+      } else {
+        memberId = `sb-mig-${n.id}-${i}-${seq++}`;
+        newNodes.push({
+          id: memberId,
+          kind: "image",
+          x: pos.x,
+          y: pos.y,
+          data: { name: c.name ?? `图片 ${i + 1}`, src: c.src },
+        });
+      }
+      memberIds.push(memberId);
+      members.push({ id: memberId, kind, name: c.name });
+    });
+
+    const next = { ...sb, memberIds, members };
+    delete (next as { cells?: unknown }).cells;
+    return { ...n, data: { ...n.data, storyboard: next } } as CanvasNode;
+  });
+
+  const withRepos = migrated.map((n) => {
+    const pos = repositioned.get(n.id);
+    return pos ? { ...n, x: pos.x, y: pos.y } : n;
+  });
+
+  return sortNodesContainerFirst([...withRepos, ...newNodes]);
 }
 
 // ── Reconcile editor/selection refs after undo/redo ─────────────────────────
@@ -295,6 +414,7 @@ export const useCanvas = create<StoreState>((set, get) => ({
   editorScriptId: null,
   batchVideoSbId: null,
   saveStatus: "idle" as SaveStatus,
+  clipboard: null,
 
   setProjectName: (n) => set({ projectName: n }),
 
@@ -314,7 +434,14 @@ export const useCanvas = create<StoreState>((set, get) => ({
       // mounted as real image nodes — including older projects saved before this
       // logic existed, or ones left empty by the previous one-shot latch bug.
       for (const n of get().nodes) {
-        if (n.kind === "script") get().materializeAssetGroups(n.id);
+        if (n.kind === "script") {
+          get().materializeAssetGroups(n.id);
+          // Re-space downstream groups generated with the old cramped layout.
+          get().relayoutShotGroups(n.id);
+          // Back-fill per-shot reference edges (asset image → storyboard/video
+          // shot) for groups generated before this wiring existed.
+          get().reconcileShotReferenceEdges(n.id);
+        }
       }
       // The subscription below schedules a save on every nodes/edges change,
       // including this one. Cancel it so a fresh load doesn't immediately
@@ -376,12 +503,43 @@ export const useCanvas = create<StoreState>((set, get) => ({
   setNodes: (nodes) => set({ nodes }),
 
   batchUpdatePositions: (updates) => {
-    set((s) => ({
-      nodes: s.nodes.map((n) => {
+    set((s) => {
+      // When a group is dragged, propagate the same delta to its member nodes
+      // (which are real, absolutely-positioned canvas nodes) so a frame/group
+      // moves together with its contents. Members already in this batch (e.g.
+      // dragged together via multi-select) are left untouched to avoid
+      // double-applying the offset. Card-style groups with virtual members
+      // simply match no real node, so this is a no-op for them.
+      const memberDeltas: Record<string, { dx: number; dy: number }> = {};
+      for (const n of s.nodes) {
+        const memberIds =
+          n.kind === "nodeGroup"
+            ? n.data.memberIds
+            : n.kind === "storyboard"
+              ? n.data.storyboard.memberIds
+              : null;
+        if (!memberIds) continue;
         const pos = updates[n.id];
-        return pos ? { ...n, x: pos.x, y: pos.y } : n;
-      }),
-    }));
+        if (!pos) continue;
+        const dx = pos.x - n.x;
+        const dy = pos.y - n.y;
+        if (dx === 0 && dy === 0) continue;
+        for (const mid of memberIds) {
+          if (updates[mid]) continue;
+          memberDeltas[mid] = { dx, dy };
+        }
+      }
+
+      return {
+        nodes: s.nodes.map((n) => {
+          const pos = updates[n.id];
+          if (pos) return { ...n, x: pos.x, y: pos.y };
+          const d = memberDeltas[n.id];
+          if (d) return { ...n, x: n.x + d.dx, y: n.y + d.dy };
+          return n;
+        }),
+      };
+    });
   },
 
   updateNode: (id, patch) =>
@@ -442,18 +600,118 @@ export const useCanvas = create<StoreState>((set, get) => ({
     } else if (kind === "generateVideo") {
       const count = existing.filter((n) => n.kind === "generateVideo").length;
       name = `视频${count + 1}`;
+    } else if (kind === "director") {
+      name = `导演台 ${existing.filter((n) => n.kind === "director").length + 1}`;
     }
     const node = createNodeByKind(kind, id, x, y, name);
     set((s) => ({ nodes: [...s.nodes, node] }));
     return id;
   },
 
-  removeNode: (id) => {
+  removeNode: (id) => get().removeNodes([id]),
+
+  removeNodes: (ids) => {
+    if (ids.length === 0) return;
+    const drop = new Set(ids);
     get().pushHistory();
     set((s) => ({
-      nodes: s.nodes.filter((n) => n.id !== id),
-      edges: s.edges.filter((e) => e.from !== id && e.to !== id),
+      // Drop the nodes, then prune them from any container that referenced them
+      // so member counts (e.g. 分镜组 "n 个节点") stay真实 and never go stale.
+      nodes: s.nodes
+        .filter((n) => !drop.has(n.id))
+        .map((n) => {
+          if (n.kind === "storyboard" && n.data.storyboard.memberIds.some((mid) => drop.has(mid))) {
+            const sb = n.data.storyboard;
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                storyboard: {
+                  ...sb,
+                  memberIds: sb.memberIds.filter((mid) => !drop.has(mid)),
+                  members: sb.members?.filter((m) => !drop.has(m.id)),
+                },
+              },
+            } as CanvasNode;
+          }
+          if (n.kind === "nodeGroup" && n.data.memberIds?.some((mid) => drop.has(mid))) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                memberIds: n.data.memberIds.filter((mid) => !drop.has(mid)),
+                members: (n.data.members ?? []).filter((m) => !drop.has(m.id)),
+              },
+            } as CanvasNode;
+          }
+          return n;
+        }),
+      edges: s.edges.filter((e) => !drop.has(e.from) && !drop.has(e.to)),
+      selectedId: s.selectedId && drop.has(s.selectedId) ? null : s.selectedId,
     }));
+  },
+
+  duplicateNodes: (ids) => {
+    const { nodes } = get();
+    const picked = nodes.filter((n) => ids.includes(n.id));
+    if (picked.length === 0) return [];
+    get().pushHistory();
+    const ts = Date.now();
+    const idMap = new Map<string, string>();
+    picked.forEach((n, i) => idMap.set(n.id, `${n.id}-copy-${ts}-${i}`));
+    const clones = picked.map(
+      (n) =>
+        ({
+          ...structuredClone(n),
+          id: idMap.get(n.id)!,
+          x: n.x + 40,
+          y: n.y + 40,
+        }) as CanvasNode,
+    );
+    // Carry over edges that are fully internal to the duplicated selection.
+    const newEdges: Edge[] = get()
+      .edges.filter((e) => idMap.has(e.from) && idMap.has(e.to))
+      .map((e, i) => ({
+        ...e,
+        id: `e-copy-${ts}-${i}`,
+        from: idMap.get(e.from)!,
+        to: idMap.get(e.to)!,
+      }));
+    const newIds = clones.map((n) => n.id);
+    set((s) => ({
+      nodes: [...s.nodes, ...clones],
+      edges: [...s.edges, ...newEdges],
+      selectedId: newIds[0] ?? s.selectedId,
+    }));
+    return newIds;
+  },
+
+  copyNodes: (ids) => {
+    const { nodes } = get();
+    const picked = nodes.filter((n) => ids.includes(n.id));
+    if (picked.length === 0) return;
+    set({ clipboard: picked.map((n) => structuredClone(n)) });
+  },
+
+  pasteNodes: () => {
+    const { clipboard } = get();
+    if (!clipboard || clipboard.length === 0) return [];
+    get().pushHistory();
+    const ts = Date.now();
+    const idMap = new Map<string, string>();
+    clipboard.forEach((n, i) => idMap.set(n.id, `${n.id}-paste-${ts}-${i}`));
+    const clones = clipboard.map(
+      (n) =>
+        ({
+          ...structuredClone(n),
+          id: idMap.get(n.id)!,
+          x: n.x + 40,
+          y: n.y + 40,
+        }) as CanvasNode,
+    );
+    const newIds = clones.map((n) => n.id);
+    set((s) => ({ nodes: [...s.nodes, ...clones], selectedId: newIds[0] ?? s.selectedId }));
+    return newIds;
   },
 
   addEdge: (from, to, sourceHandle?, toHandle?) => {

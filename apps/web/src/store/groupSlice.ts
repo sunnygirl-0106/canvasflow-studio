@@ -1,5 +1,7 @@
-import { autoGrid, fillCells } from "@/lib/storyboard";
+import { placeholderImage } from "@canvasflow/shared";
+import { autoGrid } from "@/lib/storyboard";
 import { gridCell } from "@/lib/gridLayout";
+import { buildContainer, remapEdges, CARD_W, CARD_H, CARD_GAP, CARD_PAD } from "@/lib/container";
 import {
   type CanvasNode,
   type NodeKind,
@@ -27,37 +29,35 @@ export function createGroupSlice(set: SetState, get: GetState) {
       const ts = Date.now();
       const groupId = `group-${ts}`;
 
-      const NODE_W = 240;
-      const NODE_H = 160;
-      const PAD = 24;
+      // A 打组 is a FRAME container: member nodes stay REAL and full-size, we
+      // only tidy their layout into a neat grid (messy → 整齐). Never a thumbnail
+      // card — that would shrink the images. Keep the visual order (row-major by
+      // current position) so tidying feels predictable.
+      const ordered = [...picked].sort((a, b) => a.y - b.y || a.x - b.x);
       const minX = Math.min(...picked.map((n) => n.x));
       const minY = Math.min(...picked.map((n) => n.y));
-      const maxX = Math.max(...picked.map((n) => n.x + NODE_W));
-      const maxY = Math.max(...picked.map((n) => n.y + NODE_H));
 
-      const groupNode: CanvasNode = {
-        id: groupId,
-        kind: "nodeGroup",
-        x: minX - PAD,
-        y: minY - PAD,
-        data: {
-          name: `普通组 ${nodes.filter((n) => n.kind === "nodeGroup").length + 1}`,
-          memberIds: picked.map((n) => n.id),
-          // `src` intentionally omitted — renderer reads live from member nodes.
-          members: picked.map((n) => ({
-            id: n.id,
-            kind: n.kind,
-            name: n.data.name,
-          })),
-          groupColor: "#56C7CF",
-          groupLayout: "grid",
-          groupWidth: maxX - minX + PAD * 2,
-          groupHeight: maxY - minY + PAD * 2,
-        },
-      };
+      // `src` intentionally omitted — renderer reads live from member nodes.
+      const { containerNode: groupNode, memberPositions: posById } = buildContainer({
+        mode: "cardGroup",
+        containerId: groupId,
+        name: `普通组 ${nodes.filter((n) => n.kind === "nodeGroup").length + 1}`,
+        memberIds: ordered.map((n) => n.id),
+        // Container origin is members' top-left minus the frame padding.
+        origin: { x: minX - CARD_PAD, y: minY - CARD_PAD },
+        nodes,
+        groupColor: "#56C7CF",
+      });
 
       set((s) => ({
-        nodes: [groupNode, ...s.nodes],
+        // Container prepended → painted behind its (repositioned) real members.
+        nodes: [
+          groupNode,
+          ...s.nodes.map((n) => {
+            const p = posById.get(n.id);
+            return p ? { ...n, x: p.x, y: p.y } : n;
+          }),
+        ],
         selectedId: groupId,
         panelOpen: false,
       }));
@@ -105,23 +105,19 @@ export function createGroupSlice(set: SetState, get: GetState) {
 
       // Lay the newly-materialized image nodes out in a grid anchored at the
       // group's frame, matching the visual order they had inside the group.
-      const NODE_W = 240;
-      const NODE_H = 160;
-      const GAP = 20;
-      const PAD = 24;
       const cols = Math.max(1, Math.ceil(Math.sqrt(virtualMembers.length)));
-      const baseX = groupNode.x + PAD;
-      const baseY = groupNode.y + PAD;
+      const baseX = groupNode.x + CARD_PAD;
+      const baseY = groupNode.y + CARD_PAD;
       const ts = Date.now();
 
       const newNodes: CanvasNode[] = virtualMembers.map((m, i) => {
         const { x, y } = gridCell(i, cols, {
           baseX,
           baseY,
-          cellW: NODE_W,
-          cellH: NODE_H,
-          gapX: GAP,
-          gapY: GAP,
+          cellW: CARD_W,
+          cellH: CARD_H,
+          gapX: CARD_GAP,
+          gapY: CARD_GAP,
         });
         return {
           id: `img-${ts}-${i}`,
@@ -190,13 +186,8 @@ export function createGroupSlice(set: SetState, get: GetState) {
 
       get().pushHistory();
       const memberIds = groupNode.data.memberIds;
-      const NODE_W = 240;
-      const NODE_H = 160;
-      const GAP_X = 20;
-      const GAP_Y = 20;
-      const PAD = 24;
-      const baseX = groupNode.x + PAD;
-      const baseY = groupNode.y + PAD;
+      const baseX = groupNode.x + CARD_PAD;
+      const baseY = groupNode.y + CARD_PAD;
 
       const cols =
         layout === "horizontal"
@@ -213,16 +204,16 @@ export function createGroupSlice(set: SetState, get: GetState) {
           gridCell(i, cols, {
             baseX,
             baseY,
-            cellW: NODE_W,
-            cellH: NODE_H,
-            gapX: GAP_X,
-            gapY: GAP_Y,
+            cellW: CARD_W,
+            cellH: CARD_H,
+            gapX: CARD_GAP,
+            gapY: CARD_GAP,
           }),
         );
       });
 
-      const frameW = cols * NODE_W + (cols - 1) * GAP_X + PAD * 2;
-      const frameH = rows * NODE_H + (rows - 1) * GAP_Y + PAD * 2;
+      const frameW = cols * CARD_W + (cols - 1) * CARD_GAP + CARD_PAD * 2;
+      const frameH = rows * CARD_H + (rows - 1) * CARD_GAP + CARD_PAD * 2;
 
       set((s) => ({
         nodes: s.nodes.map((n) => {
@@ -245,55 +236,73 @@ export function createGroupSlice(set: SetState, get: GetState) {
       if (!groupNode || groupNode.kind !== "nodeGroup") return null;
 
       get().pushHistory();
-      const memberIds = new Set(groupNode.data.memberIds);
-      const liveMembers = nodes.filter((n) => memberIds.has(n.id));
+      // Members are already real nodes — keep them and snap into storyboard
+      // slots; only the container changes (group → storyboard). No recreation.
+      const orderedIds = groupNode.data.memberIds.filter((mid) => nodes.some((n) => n.id === mid));
       const ts = Date.now();
       const sbId = `storyboard-${ts}`;
-      const { rows, cols } = autoGrid(liveMembers.length);
-      const cells = fillCells(
-        liveMembers.map((n) => ({
-          src: ("src" in n.data ? (n.data as { src?: string }).src : undefined) ?? "",
-          sourceNodeId: n.id,
-          name: n.data.name,
-        })),
+      const { rows, cols } = autoGrid(orderedIds.length);
+
+      const { containerNode: sbNode, memberPositions: posById } = buildContainer({
+        mode: "storyboard",
+        containerId: sbId,
+        name: groupNode.data.name ?? "分镜组",
+        memberIds: orderedIds,
+        origin: { x: groupNode.x, y: groupNode.y },
+        nodes,
+        ratio: DEFAULT_RATIO,
         rows,
         cols,
-      );
-
-      const sbNode: CanvasNode = {
-        id: sbId,
-        kind: "storyboard",
-        x: groupNode.x,
-        y: groupNode.y,
-        data: {
-          name: groupNode.data.name ?? "分镜组",
-          storyboard: { rows, cols, ratio: DEFAULT_RATIO, showIndex: false, cells },
-        },
-      };
+      });
 
       set((s) => ({
-        nodes: [...s.nodes.filter((n) => n.id !== id && !memberIds.has(n.id)), sbNode],
-        edges: s.edges.filter(
-          (e) => e.from !== id && e.to !== id && !memberIds.has(e.from) && !memberIds.has(e.to),
-        ),
+        // Container prepended → behind its (kept, repositioned) members.
+        nodes: [
+          sbNode,
+          ...s.nodes
+            .filter((n) => n.id !== id)
+            .map((n) => {
+              const p = posById.get(n.id);
+              return p ? { ...n, x: p.x, y: p.y } : n;
+            }),
+        ],
+        edges: remapEdges(s.edges, new Map([[id, sbId]])),
         selectedId: sbId,
       }));
       return sbId;
     },
 
     executeGroup: (id: string) => {
-      // Transient visual flag only (mock "running" spinner) — deliberately NOT
-      // pushed to history, since it isn't a persistent canvas mutation.
+      const { nodes } = get();
+      const group = nodes.find((n) => n.id === id);
+      if (!group || group.kind !== "nodeGroup") return;
+
+      // Cancel any in-flight run for this group before (re)starting.
       const prev = groupExecTimers.get(id);
-      if (prev) clearTimeout(prev);
-      set((s) => ({
-        nodes: s.nodes.map((n) =>
-          n.id === id && n.kind === "nodeGroup"
-            ? { ...n, data: { ...n.data, executing: true } }
-            : n,
+      if (prev) clearInterval(prev);
+
+      // Real, generatable member nodes (image/video) on the canvas. Frame
+      // groups (asset/storyboard/video) wrap real nodes; legacy card groups
+      // with virtual members resolve to none → fall back to a spinner-only run.
+      const genKinds: NodeKind[] = ["generateImage", "generateVideo"];
+      const memberIds = new Set(
+        group.data.memberIds.filter((mid) =>
+          nodes.some((n) => n.id === mid && genKinds.includes(n.kind)),
         ),
+      );
+
+      // Mark the group executing and each member as generating.
+      set((s) => ({
+        nodes: s.nodes.map((n) => {
+          if (n.id === id && n.kind === "nodeGroup")
+            return { ...n, data: { ...n.data, executing: true } };
+          if (memberIds.has(n.id))
+            return { ...n, data: { ...n.data, status: "generating", progress: 0 } } as CanvasNode;
+          return n;
+        }),
       }));
-      const timer = setTimeout(() => {
+
+      const finishGroup = () => {
         groupExecTimers.delete(id);
         set((s) => ({
           nodes: s.nodes.map((n) =>
@@ -302,7 +311,48 @@ export function createGroupSlice(set: SetState, get: GetState) {
               : n,
           ),
         }));
-      }, 2000);
+      };
+
+      // No real members → keep the old 2s spinner-only behavior.
+      if (memberIds.size === 0) {
+        const t = setTimeout(finishGroup, 2000);
+        groupExecTimers.set(id, t);
+        return;
+      }
+
+      // Same mock-generation flow as the image/video nodes (see useMockGenerate):
+      // animate progress 0→1, then drop in a placeholder cover and mark ready.
+      const TOTAL_MS = 2400;
+      const seedFor = new Map<string, string>(
+        [...memberIds].map((mid) => [mid, `${mid}-${Math.random().toString(36).slice(2, 8)}`]),
+      );
+      const start = performance.now();
+      const timer = setInterval(() => {
+        const p = Math.min(1, (performance.now() - start) / TOTAL_MS);
+        if (p >= 1) {
+          clearInterval(timer);
+          set((s) => ({
+            nodes: s.nodes.map((n) => {
+              if (n.id === id && n.kind === "nodeGroup")
+                return { ...n, data: { ...n.data, executing: false } };
+              if (!memberIds.has(n.id)) return n;
+              const seed = seedFor.get(n.id);
+              const src =
+                n.kind === "generateVideo"
+                  ? placeholderImage(String(seed), 640, 360)
+                  : placeholderImage(String(seed), 640, 400);
+              return { ...n, data: { ...n.data, status: "ready", progress: 1, src } } as CanvasNode;
+            }),
+          }));
+          groupExecTimers.delete(id);
+          return;
+        }
+        set((s) => ({
+          nodes: s.nodes.map((n) =>
+            memberIds.has(n.id) ? ({ ...n, data: { ...n.data, progress: p } } as CanvasNode) : n,
+          ),
+        }));
+      }, 120);
       groupExecTimers.set(id, timer);
     },
   };

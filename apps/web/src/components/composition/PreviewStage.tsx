@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { Play } from "lucide-react";
 import { clipAt, clipEnd, type Track, type Clip } from "@/store/canvasStore";
 
@@ -216,7 +217,7 @@ export function PreviewStage({ tracks, currentTime, playing, onTogglePlay }: Pro
                 startDrag("move", e);
               }}
             >
-              <img
+              <DemoImg
                 src={thumbnail}
                 alt=""
                 className="w-full h-full object-cover"

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { Loader2 } from "lucide-react";
 import type { ScriptShot } from "@canvasflow/shared";
 import { parseDescription } from "@/lib/assetUtils";
@@ -252,7 +253,7 @@ export function ImageCell({
           style={{ width: 40, height: 30 }}
           onClick={() => setMenuOpen(!menuOpen)}
         >
-          <img src={src} alt="" className="w-full h-full object-cover" draggable={false} />
+          <DemoImg src={src} alt="" className="w-full h-full object-cover" draggable={false} />
         </div>
       ) : (
         <button

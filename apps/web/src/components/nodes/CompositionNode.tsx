@@ -1,4 +1,5 @@
 import { Handle, Position } from "@xyflow/react";
+import { DemoImg } from "@/components/DemoImg";
 import { memo } from "react";
 import { Scissors, Play } from "lucide-react";
 import { useCanvas, type CompositionNodeData } from "@/store/canvasStore";
@@ -61,7 +62,7 @@ function CompositionNodeImpl({ id, data }: { id: string; data: CompositionNodeDa
           }}
         >
           {thumbnail ? (
-            <img src={thumbnail} alt="" className="w-full h-full object-cover" draggable={false} />
+            <DemoImg src={thumbnail} alt="" className="w-full h-full object-cover" draggable={false} />
           ) : (
             <Play className="w-8 h-8" style={{ color: "#CBD5E1" }} />
           )}

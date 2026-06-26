@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { X, Loader2 } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 import { useAssetUpload } from "@/lib/useAssetUpload";
@@ -135,7 +136,7 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
                       }}
                       onClick={() => selectImage(img.src)}
                     >
-                      <img
+                      <DemoImg
                         src={img.src}
                         alt={img.name}
                         className="w-full h-full object-cover"

@@ -1,4 +1,5 @@
 import { RefreshCw, AlertCircle, ImageIcon, AlignLeft, Check, ArrowRight } from "lucide-react";
+import { DemoImg } from "@/components/DemoImg";
 import type { ScriptShot, ScriptAsset, WizardStep } from "@canvasflow/shared";
 
 /* ── ToolbarBtn ──────────────────────────────────────────── */
@@ -16,10 +17,10 @@ export function ToolbarBtn({
 }) {
   return (
     <button
-      className="flex items-center gap-1 rounded-lg text-[12px] font-medium transition-colors hover:bg-slate-100"
+      className="flex items-center gap-1 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/10"
       style={{
         padding: "5px 10px",
-        color: disabled ? "#CBD5E1" : "#334155",
+        color: disabled ? "#4B5563" : "#E5E7EB",
         fontFamily: "PingFang SC, Inter, system-ui",
         cursor: disabled ? "not-allowed" : undefined,
       }}
@@ -39,11 +40,11 @@ export function EmptyBody() {
       className="flex flex-col items-center justify-center rounded-xl"
       style={{
         height: 200,
-        background: "#FAFAFA",
-        border: "1px dashed #D4D4D4",
+        background: "#15171A",
+        border: "1px dashed #3F4248",
       }}
     >
-      <AlignLeft className="w-10 h-10" style={{ color: "#D1D5DB" }} strokeWidth={1.6} />
+      <AlignLeft className="w-10 h-10" style={{ color: "#4B5563" }} strokeWidth={1.6} />
     </div>
   );
 }
@@ -57,8 +58,8 @@ export function GeneratingBody({ progress, onCancel }: { progress: number; onCan
     <div
       className="flex flex-col rounded-xl"
       style={{
-        background: "#FAFAFA",
-        border: "1px solid #E5E5E5",
+        background: "#15171A",
+        border: "1px solid #2A2D33",
         padding: "20px",
       }}
     >
@@ -72,7 +73,7 @@ export function GeneratingBody({ progress, onCancel }: { progress: number; onCan
                 className="flex-1 rounded-md animate-pulse"
                 style={{
                   height: r === 0 || r === 2 ? 28 : 22,
-                  background: "#E5E5E5",
+                  background: "#2A2D33",
                 }}
               />
             ))}
@@ -88,14 +89,13 @@ export function GeneratingBody({ progress, onCancel }: { progress: number; onCan
           className="inline-flex items-center gap-3 rounded-full"
           style={{
             padding: "8px 20px",
-            background: "#FFFFFF",
-            border: "1px solid #E5E5E5",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            background: "#1F2125",
+            border: "1px solid #2A2D33",
           }}
         >
           <span
             className="text-[14px] font-medium"
-            style={{ color: "#1F2937", fontFamily: "PingFang SC, Inter, system-ui" }}
+            style={{ color: "#E5E7EB", fontFamily: "PingFang SC, Inter, system-ui" }}
           >
             生成中 {progress}%...
           </span>
@@ -138,12 +138,12 @@ export function ReadyBody({
     <div
       className="flex flex-col items-center rounded-xl"
       style={{
-        background: "#FAFAFA",
-        border: "1px solid #E5E5E5",
+        background: "#15171A",
+        border: "1px solid #2A2D33",
         padding: "24px 20px",
       }}
     >
-      <AlignLeft className="w-10 h-10 mb-6" style={{ color: "#D1D5DB" }} strokeWidth={1.6} />
+      <AlignLeft className="w-10 h-10 mb-6" style={{ color: "#4B5563" }} strokeWidth={1.6} />
 
       {/* Stepper */}
       <div className="flex items-center gap-0 mb-8">
@@ -156,13 +156,13 @@ export function ReadyBody({
                   width: 32,
                   height: 32,
                   ...(step.done
-                    ? { background: "#1F2937", color: "#FFFFFF" }
+                    ? { background: "#14B8A6", color: "#0B1220" }
                     : step.active
-                      ? { background: "#1F2937", color: "#FFFFFF" }
+                      ? { background: "#14B8A6", color: "#0B1220" }
                       : {
                           background: "transparent",
-                          border: "2px solid #D1D5DB",
-                          color: "#D1D5DB",
+                          border: "2px solid #3F4248",
+                          color: "#6B7280",
                         }),
                 }}
               >
@@ -171,7 +171,7 @@ export function ReadyBody({
               <span
                 className="text-[12px] mt-1.5 whitespace-nowrap"
                 style={{
-                  color: step.done || step.active ? "#1F2937" : "#9CA3AF",
+                  color: step.done || step.active ? "#E5E7EB" : "#9CA3AF",
                   fontFamily: "PingFang SC, Inter, system-ui",
                   fontWeight: step.active ? 600 : 400,
                 }}
@@ -186,7 +186,7 @@ export function ReadyBody({
                   width: 48,
                   height: 2,
                   marginTop: -18,
-                  background: steps[i + 1].done || steps[i + 1].active ? "#1F2937" : "#E5E5E5",
+                  background: steps[i + 1].done || steps[i + 1].active ? "#14B8A6" : "#2A2D33",
                 }}
               />
             )}
@@ -195,11 +195,11 @@ export function ReadyBody({
       </div>
 
       <button
-        className="w-full flex items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-colors hover:bg-gray-100"
+        className="w-full flex items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-colors hover:bg-white/10"
         style={{
           height: 48,
-          background: "#F3F4F6",
-          color: "#1F2937",
+          background: "#2A2D33",
+          color: "#E5E7EB",
           fontFamily: "PingFang SC, Inter, system-ui",
         }}
         onClick={onOpen}
@@ -247,11 +247,11 @@ export function ShotThumbnailStrip({
             style={{
               width: 48,
               height: 48,
-              background: img ? undefined : "#E5E7EB",
+              background: img ? undefined : "#2A2D33",
             }}
           >
             {img ? (
-              <img src={img} alt={`镜 ${shot.index}`} className="w-full h-full object-cover" />
+              <DemoImg src={img} alt={`镜 ${shot.index}`} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <ImageIcon className="w-4 h-4" style={{ color: "#9CA3AF" }} />
@@ -276,15 +276,15 @@ export function FailedBody({ error, onRetry }: { error?: string; onRetry: () => 
   return (
     <div
       className="flex flex-col items-center justify-center rounded-xl"
-      style={{ height: 120, background: "#FEF2F2", border: "1px solid #FECACA" }}
+      style={{ height: 120, background: "#2A1416", border: "1px solid #5B2526" }}
     >
-      <AlertCircle className="w-6 h-6 mb-2" style={{ color: "#EF4444" }} />
-      <span className="text-[12px] mb-2" style={{ color: "#DC2626" }}>
+      <AlertCircle className="w-6 h-6 mb-2" style={{ color: "#F87171" }} />
+      <span className="text-[12px] mb-2" style={{ color: "#FCA5A5" }}>
         {error || "生成失败"}
       </span>
       <button
         className="text-[12px] font-medium rounded-lg"
-        style={{ padding: "4px 12px", background: "#FEE2E2", color: "#DC2626" }}
+        style={{ padding: "4px 12px", background: "#3B1A1D", color: "#FCA5A5" }}
         onClick={onRetry}
       >
         重试

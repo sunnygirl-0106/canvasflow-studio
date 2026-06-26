@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useReactFlow } from "@xyflow/react";
 import {
   FileText,
   Image as ImageIcon,
@@ -7,6 +8,7 @@ import {
   Upload,
   Scissors,
   ScrollText,
+  Layers,
   ChevronRight,
 } from "lucide-react";
 import { useCanvas, type CanvasNode, type NodeKind } from "@/store/canvasStore";
@@ -34,6 +36,13 @@ const NODE_ITEMS: PanelItem[] = [
     isNew: true,
   },
   { key: "audio", title: "音频", subtitle: "音乐、配音、音效", icon: Music2 },
+  {
+    key: "director",
+    title: "导演台",
+    subtitle: "3D空间搭建场景多视角截图",
+    icon: Layers,
+    isNew: true,
+  },
 ];
 
 const RESOURCE_ITEMS: PanelItem[] = [
@@ -48,8 +57,20 @@ export function AddNodePanel() {
   const addNodeAtPosition = useCanvas((s) => s.addNodeAtPosition);
   const updateNode = useCanvas((s) => s.updateNode);
   const select = useCanvas((s) => s.select);
+  const { screenToFlowPosition } = useReactFlow();
   const ref = useRef<HTMLDivElement>(null);
   const [scriptMenuOpen, setScriptMenuOpen] = useState(false);
+
+  // New nodes drop at the right-click location (converted screen→flow). When
+  // the panel is docked from the rail (no screen anchor), drop at the viewport
+  // center instead of a fixed off-screen point.
+  const anchorFlow = () => {
+    const screen =
+      addPanel.x !== undefined && addPanel.y !== undefined
+        ? { x: addPanel.x, y: addPanel.y }
+        : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    return screenToFlowPosition(screen);
+  };
 
   const open = addPanel.open;
   const onClose = () => setAddPanel({ open: false });
@@ -79,10 +100,8 @@ export function AddNodePanel() {
 
   if (!open) return null;
 
-  const flowAnchorX = 600;
-  const flowAnchorY = 200;
-
   const uploadFlow = () => {
+    const { x, y } = anchorFlow();
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -90,7 +109,7 @@ export function AddNodePanel() {
       const file = input.files?.[0];
       if (!file) return;
       const url = URL.createObjectURL(file);
-      const id = addNodeAtPosition("generateImage", flowAnchorX, flowAnchorY);
+      const id = addNodeAtPosition("generateImage", x, y);
       updateNode(
         id,
         (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
@@ -110,7 +129,8 @@ export function AddNodePanel() {
       uploadFlow();
       return;
     }
-    const id = addNodeAtPosition(kind as NodeKind, flowAnchorX, flowAnchorY);
+    const { x, y } = anchorFlow();
+    const id = addNodeAtPosition(kind as NodeKind, x, y);
     select(id);
     onClose();
   };
@@ -153,7 +173,8 @@ export function AddNodePanel() {
               <ScriptEntryMenu
                 onSelect={(mode) => {
                   if (mode === "script") {
-                    const id = addNodeAtPosition("script", flowAnchorX, flowAnchorY);
+                    const { x, y } = anchorFlow();
+                    const id = addNodeAtPosition("script", x, y);
                     select(id);
                     onClose();
                   }

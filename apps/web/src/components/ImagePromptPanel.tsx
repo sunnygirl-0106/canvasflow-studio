@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { Check, ChevronDown, Sliders, ImageIcon, ArrowUp } from "lucide-react";
 import {
   useCanvas,
@@ -6,6 +7,7 @@ import {
   type GenerateImageNodeData,
   type ImageNodeData,
 } from "@/store/canvasStore";
+import { placeholderImage } from "@canvasflow/shared";
 import { getUpstreamMounts } from "@/store/selectors/upstream";
 import { estimateImageCost } from "@/lib/cost";
 import { useNodePatch } from "@/lib/useNodePatch";
@@ -53,7 +55,7 @@ export function ImagePromptPanel({ nodeId }: { nodeId: string }) {
   const onSend = () => {
     if (data.status === "generating") return;
     const seed = Math.random().toString(36).slice(2, 8);
-    runGenerate(1800, () => ({ src: `https://picsum.photos/seed/${seed}/640/400` }));
+    runGenerate(1800, () => ({ src: placeholderImage(seed, 640, 400) }));
   };
 
   return (
@@ -116,7 +118,7 @@ export function ImagePromptPanel({ nodeId }: { nodeId: string }) {
                 className="inline-flex items-center gap-2 rounded-lg"
                 style={{ padding: "3px 8px 3px 3px", background: "#2A2D33" }}
               >
-                <img
+                <DemoImg
                   src={m.src}
                   alt=""
                   draggable={false}

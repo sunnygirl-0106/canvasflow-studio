@@ -1,7 +1,19 @@
+import { placeholderImage } from "@canvasflow/shared";
 import { generateScript as apiGenerateScript } from "@/services/api";
-import { autoGrid, fillCells } from "@/lib/storyboard";
 import { gridCell } from "@/lib/gridLayout";
-import { extractAssetsFromShots } from "@/lib/assetUtils";
+import {
+  buildContainer,
+  frameGroupBox,
+  FRAME_PAD,
+  FRAME_HEADER,
+  FRAME_GAP_X,
+  FRAME_GAP_Y,
+  IMG_W,
+  IMG_H,
+  VID_W,
+  VID_H,
+} from "@/lib/container";
+import { extractAssetsFromShots, MENTION_REGEX } from "@/lib/assetUtils";
 import {
   type CanvasNode,
   type Edge,
@@ -16,7 +28,6 @@ import {
   type WizardStep,
   type SetState,
   type GetState,
-  DEFAULT_RATIO,
 } from "./types";
 
 // ── Script helpers ────────────────────────────────────────────────────────────
@@ -69,6 +80,60 @@ function patchScriptShots(
 function getScriptData(nodes: CanvasNode[], id: string) {
   const node = nodes.find((n) => n.id === id);
   return node?.kind === "script" ? node.data.script : undefined;
+}
+
+// Reference edges: which materialized asset images does a shot @mention in its
+// prompts? Returns the canvas ids of the asset image nodes that currently exist
+// for those mentions, so a storyboard/video shot can wire back to exactly the
+// assets it uses. Mentions are matched by asset NAME (how assets are extracted).
+function referencedAssetNodeIds(
+  nodes: CanvasNode[],
+  scriptId: string,
+  script: ScriptData,
+  shot: ScriptShot,
+): string[] {
+  const text = [shot.description, shot.imagePrompt, shot.videoPrompt, shot.finalPrompt]
+    .filter(Boolean)
+    .join(" ");
+  const names = new Set<string>();
+  const re = new RegExp(MENTION_REGEX.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) names.add(m[1]);
+  if (names.size === 0) return [];
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const a of script.assets ?? []) {
+    if (!names.has(a.name)) continue;
+    const nodeId = `assetimg-${scriptId}-${a.id}`;
+    if (seen.has(nodeId)) continue;
+    if (nodes.some((n) => n.id === nodeId)) {
+      ids.push(nodeId);
+      seen.add(nodeId);
+    }
+  }
+  return ids;
+}
+
+function buildReferenceEdges(
+  nodes: CanvasNode[],
+  scriptId: string,
+  script: ScriptData,
+  pairs: { shot: ScriptShot; memberId: string }[],
+): Edge[] {
+  const edges: Edge[] = [];
+  for (const { shot, memberId } of pairs) {
+    for (const assetNodeId of referencedAssetNodeIds(nodes, scriptId, script, shot)) {
+      edges.push({
+        id: `edge-ref-${memberId}-${assetNodeId}`,
+        from: assetNodeId,
+        to: memberId,
+        sourceHandle: "source-process",
+        toHandle: "in",
+      });
+    }
+  }
+  return edges;
 }
 
 function getConnectedScriptSource(
@@ -275,23 +340,23 @@ export function createScriptSlice(set: SetState, get: GetState) {
 
       get().pushHistory();
       const ts = Date.now();
-      const filledCells = sb.cells.filter((c) => c.src);
+      const memberCount = sb.memberIds.length;
 
       // `src` not stored on members — once the corresponding generateVideo
       // node materializes, GroupNode reads its live src. Until then the cards
       // render as empty placeholders (matches the "not yet generated" state).
-      const members = filledCells.map((_cell, i) => ({
+      const members = Array.from({ length: memberCount }, (_, i) => ({
         id: `vid-sb-${ts}-${i}`,
         kind: "generateVideo" as NodeKind,
         name: `分镜视频-#${i + 1}`,
       }));
 
-      const cols = Math.min(filledCells.length, 4);
+      const cols = Math.min(memberCount, 4) || 1;
       const CARD_W = 260;
       const CARD_H = 180;
       const PAD = 24;
-      const imgCols = Math.min(filledCells.length, cols);
-      const imgRows = Math.ceil(filledCells.length / cols);
+      const imgCols = Math.min(memberCount, cols) || 1;
+      const imgRows = Math.ceil(memberCount / cols) || 1;
 
       const groupId = `videogroup-${ts}`;
       const groupNode: CanvasNode = {
@@ -310,16 +375,10 @@ export function createScriptSlice(set: SetState, get: GetState) {
         },
       };
 
-      const edge: Edge = {
-        id: `edge-sb-vg-${ts}`,
-        from: sbId,
-        to: groupId,
-        sourceHandle: "sb-out",
-      };
-
+      // The storyboard is a handle-less visual container (like the asset group),
+      // so no edge is drawn from it — the video group is simply placed below.
       set((s) => ({
         nodes: [...s.nodes, groupNode],
-        edges: [...s.edges, edge],
         selectedId: groupId,
         batchVideoSbId: null,
       }));
@@ -345,37 +404,59 @@ export function createScriptSlice(set: SetState, get: GetState) {
 
       get().pushHistory();
       const ts = Date.now();
+      const groupId = `videogroup-${ts}`;
 
-      const members = selectedShots.map((shot, i) => ({
+      // Same structure as the 资产组 / 分镜图组: REAL generateVideo nodes wrapped
+      // in a dashed-frame group. Each node is a draggable/editable/generatable
+      // video node (empty until generated) — no virtual placeholder cards.
+      // Shared frame constants (identical to 资产组 / 分镜图组) so spacing matches
+      // and the "+" handles never overlap. 2-column grid right of the script.
+      const groupX = scriptNode.x + 800;
+      const groupY = scriptNode.y;
+
+      // Member metadata is known up front (one video node per shot); build the
+      // container off it, then place the real nodes at the returned grid slots.
+      const memberMeta = selectedShots.map((shot, i) => ({
         id: `vid-script-${ts}-${i}`,
-        kind: "generateVideo" as NodeKind,
+        shot,
         name: `分镜视频-#${shot.index}`,
         duration: opts.durations[shot.id] ?? shot.duration,
       }));
 
-      const cols = Math.min(selectedShots.length, 3);
-      const CARD_W = 260;
-      const CARD_H = 200;
-      const PAD = 24;
-      const imgCols = Math.min(selectedShots.length, cols);
-      const imgRows = Math.ceil(selectedShots.length / cols);
+      const { containerNode: groupNode, memberPositions } = buildContainer({
+        mode: "frameGroup",
+        cellKind: "video",
+        containerId: groupId,
+        name: `视频组 · ${script.title || scriptNode.data.name || "脚本"}`,
+        memberIds: memberMeta.map((m) => m.id),
+        origin: { x: groupX, y: groupY },
+        members: memberMeta.map((m) => ({
+          id: m.id,
+          kind: "generateVideo" as NodeKind,
+          name: m.name,
+          duration: m.duration,
+        })),
+        groupColor: "#8B5CF6",
+      });
 
-      const groupId = `videogroup-${ts}`;
-      const groupNode: CanvasNode = {
-        id: groupId,
-        kind: "nodeGroup",
-        x: scriptNode.x + 800,
-        y: scriptNode.y,
-        data: {
-          name: `视频组 · ${script.title || scriptNode.data.name || "脚本"}-视频组`,
-          memberIds: members.map((m) => m.id),
-          members,
-          groupColor: "#8B5CF6",
-          groupLayout: "grid",
-          groupWidth: imgCols * CARD_W + (imgCols - 1) * 16 + PAD * 2,
-          groupHeight: imgRows * CARD_H + (imgRows - 1) * 16 + PAD * 2 + 40,
-        },
-      };
+      const videoNodes: CanvasNode[] = memberMeta.map((m) => {
+        const cell = memberPositions.get(m.id)!;
+        return {
+          id: m.id,
+          kind: "generateVideo",
+          x: cell.x,
+          y: cell.y,
+          data: {
+            name: m.name,
+            status: "empty",
+            duration: m.duration,
+            model: opts.model,
+            aspect: opts.aspectRatio,
+            resolution: opts.resolution,
+            prompt: m.shot.finalPrompt || m.shot.videoPrompt,
+          },
+        };
+      });
 
       const edge: Edge = {
         id: `edge-script-vg-${ts}`,
@@ -385,9 +466,18 @@ export function createScriptSlice(set: SetState, get: GetState) {
         toHandle: "group-in",
       };
 
+      // Per-shot reference edges: each video node wires back to the asset images
+      // its shot @mentions.
+      const refEdges = buildReferenceEdges(
+        nodes,
+        scriptId,
+        script,
+        selectedShots.map((shot, i) => ({ shot, memberId: videoNodes[i].id })),
+      );
+
       set((s) => ({
-        nodes: [...s.nodes, groupNode],
-        edges: [...s.edges, edge],
+        nodes: [groupNode, ...s.nodes, ...videoNodes],
+        edges: [...s.edges, edge, ...refEdges],
         selectedId: groupId,
       }));
     },
@@ -526,7 +616,7 @@ export function createScriptSlice(set: SetState, get: GetState) {
             if (progress >= 100) {
               return {
                 ...a,
-                image: `https://picsum.photos/seed/${a.id}/400/400`,
+                image: placeholderImage(a.id, 400, 400),
                 generationStatus: { state: "done" as const },
               };
             }
@@ -574,27 +664,41 @@ export function createScriptSlice(set: SetState, get: GetState) {
       if (script.assetGroupDetached) return;
 
       const groupId = `asset-group-${scriptId}`;
-      const edgeId = `edge-asset-${scriptId}`;
+      const edgePrefix = `edge-asset-${scriptId}`;
+      const isAssetEdge = (id: string) => id === edgePrefix || id.startsWith(`${edgePrefix}-`);
       const nodeIdFor = (assetId: string) => `assetimg-${scriptId}-${assetId}`;
 
       const assetsWithImage = (script.assets ?? []).filter((a) => a.image);
+      const memberIds = assetsWithImage.map((a) => nodeIdFor(a.id));
 
-      // Grid layout (2 columns) to the LEFT of the script node.
-      const NODE_W = 420;
-      const NODE_H = 300;
-      const GAP = 40;
-      const PAD = 32;
-      const HEADER = 44;
-      const cols = Math.max(1, Math.min(assetsWithImage.length || 1, 2));
-      const rows = Math.max(1, Math.ceil(assetsWithImage.length / cols));
-      const gridW = cols * NODE_W + (cols - 1) * GAP;
-      const gridH = rows * NODE_H + (rows - 1) * GAP;
-      const groupW = gridW + PAD * 2;
-      const groupH = gridH + PAD * 2 + HEADER;
-      const groupX = scriptNode.x - groupW - 120;
-      const groupY = scriptNode.y;
-      const baseX = groupX + PAD;
-      const baseY = groupY + PAD + HEADER;
+      // Grid layout (2 columns) to the LEFT of the script node. Anchor members
+      // to the frame's ACTUAL position: if the group already exists (e.g. the
+      // user dragged the frame), reuse its position so the members and the
+      // dashed frame share one origin — otherwise they drift apart and the last
+      // row pokes out the bottom. The shared frame geometry guarantees the "+"
+      // handles never overlap (see FRAME_GAP_X).
+      const { groupW } = frameGroupBox(assetsWithImage.length || 1, IMG_W, IMG_H);
+      const existingGroup = nodes.find((n) => n.id === groupId);
+      const groupX = existingGroup ? existingGroup.x : scriptNode.x - groupW - 120;
+      const groupY = existingGroup ? existingGroup.y : scriptNode.y;
+
+      // PURELY VISUAL frame (connectable:false) — grouping is only for
+      // distinction; the real edges run per-image, not from the group.
+      const { containerNode: groupNode, memberPositions } = buildContainer({
+        mode: "frameGroup",
+        cellKind: "image",
+        containerId: groupId,
+        name: `资产组 · ${script.title || "脚本"}`,
+        memberIds,
+        origin: { x: groupX, y: groupY },
+        members: assetsWithImage.map((a) => ({
+          id: nodeIdFor(a.id),
+          kind: "image" as NodeKind,
+          name: a.name,
+        })),
+        groupColor: "#6366F1",
+        extraData: { connectable: false, sourceScriptId: scriptId },
+      });
 
       set((s) => {
         // 1. Drop the group node, its edge, and any stale asset nodes for this
@@ -608,26 +712,16 @@ export function createScriptSlice(set: SetState, get: GetState) {
           return true;
         });
 
-        // 2. Upsert a real image node per asset. Preserve a node's existing
-        //    position (user may have moved it) and only refresh src/name.
-        //    Index by id once to avoid O(assets × nodes) nested scans.
-        const nextById = new Map(nextNodes.map((n) => [n.id, n]));
-        const assetNodes: CanvasNode[] = assetsWithImage.map((a, i) => {
-          const id = nodeIdFor(a.id);
-          const existing = nextById.get(id);
-          const cell = gridCell(i, cols, {
-            baseX,
-            baseY,
-            cellW: NODE_W,
-            cellH: NODE_H,
-            gapX: GAP,
-            gapY: GAP,
-          });
+        // 2. Upsert a real image node per asset, laid out on the grid slots that
+        //    buildContainer computed so spacing stays tidy (no overlapping
+        //    handles) as assets change.
+        const assetNodes: CanvasNode[] = assetsWithImage.map((a) => {
+          const cell = memberPositions.get(nodeIdFor(a.id))!;
           return {
-            id,
+            id: nodeIdFor(a.id),
             kind: "image",
-            x: existing ? existing.x : cell.x,
-            y: existing ? existing.y : cell.y,
+            x: cell.x,
+            y: cell.y,
             data: {
               name: a.name,
               src: a.image,
@@ -644,54 +738,41 @@ export function createScriptSlice(set: SetState, get: GetState) {
           if (!presentIds.has(an.id)) nextNodes.push(an);
         }
 
+        // Drop every asset-related edge for this script; we rebuild the exact
+        // desired set below (handles the legacy one-group→script edge too).
+        const baseEdges = s.edges.filter((e) => !isAssetEdge(e.id));
+
         // 3. No generated assets → leave nothing mounted.
         if (assetNodes.length === 0) {
-          return {
-            nodes: nextNodes,
-            edges: s.edges.filter((e) => e.id !== edgeId),
-          };
+          return { nodes: nextNodes, edges: baseEdges };
         }
 
-        // 4. Upsert the dashed-frame group container in front (renders behind
-        //    its members, which sit at higher array order).
-        const existingGroup = s.nodes.find((n) => n.id === groupId);
-        const groupNode: CanvasNode = {
-          id: groupId,
-          kind: "nodeGroup",
-          x: existingGroup ? existingGroup.x : groupX,
-          y: existingGroup ? existingGroup.y : groupY,
-          data: {
-            name: `资产组 · ${script.title || "脚本"}`,
-            memberIds: assetNodes.map((n) => n.id),
-            members: assetNodes.map((n) => ({
-              id: n.id,
-              kind: "image" as NodeKind,
-              name: n.data.name,
-            })),
-            groupColor: "#6366F1",
-            groupLayout: "grid",
-            frame: true,
-            sourceScriptId: scriptId,
-            groupWidth: groupW,
-            groupHeight: groupH,
-          },
-        };
+        // 4. Mount the dashed-frame group container in front (renders behind its
+        //    members, which sit at higher array order). `groupNode` was built
+        //    above from buildContainer.
 
-        const edge: Edge = {
-          id: edgeId,
-          from: groupId,
+        // 5. One edge per asset image → script. Each image feeds the script
+        //    individually (its right handle → the script's left "in" handle).
+        const assetEdges: Edge[] = assetNodes.map((n) => ({
+          id: `${edgePrefix}-${(n.data as { assetId?: string }).assetId}`,
+          from: n.id,
           to: scriptId,
-          sourceHandle: "group-out",
+          sourceHandle: "source-process",
           toHandle: "in",
-        };
+        }));
 
         return {
           nodes: [groupNode, ...nextNodes],
-          edges: s.edges.some((e) => e.id === edgeId) ? s.edges : [...s.edges, edge],
+          edges: [...baseEdges, ...assetEdges],
         };
       });
     },
 
+    // Produce the SAME structure as the upstream asset group
+    // (`materializeAssetGroups`): REAL `image` canvas nodes wrapped in a
+    // dashed-frame "组". The cells are no longer virtual refs — each storyboard
+    // image is a draggable/editable node that survives ungrouping, mirroring the
+    // 资产组 so both sides of the script feel consistent.
     generateStoryboardFromScript: (scriptId: string, shotIds: string[]) => {
       const { nodes } = get();
       const scriptNode = nodes.find((n) => n.id === scriptId);
@@ -703,41 +784,179 @@ export function createScriptSlice(set: SetState, get: GetState) {
 
       get().pushHistory();
       const ts = Date.now();
-      const sbId = `storyboard-${ts}`;
-      const { rows, cols } = autoGrid(selectedShots.length);
+      const groupId = `sbgroup-${ts}`;
 
-      const items = selectedShots.map((shot, i) => ({
-        src: `https://picsum.photos/seed/sb-${ts}-${i}/400/225`,
-        sourceNodeId: `img-sb-${ts}-${i}`,
+      // 2-column grid below the script (identical frame geometry to 资产组 / 视频组
+      // so spacing matches and the "+" handles never overlap).
+      const groupX = scriptNode.x;
+      const groupY = scriptNode.y + 500;
+
+      const memberMeta = selectedShots.map((shot, i) => ({
+        id: `sbimg-${ts}-${i}`,
         name: `镜 ${shot.index}`,
+        src: placeholderImage(`sb-${ts}-${i}`, 400, 225),
       }));
-      const cells = fillCells(items, rows, cols);
 
-      const sbNode: CanvasNode = {
-        id: sbId,
-        kind: "storyboard",
-        x: scriptNode.x,
-        y: scriptNode.y + 500,
-        data: {
-          name: `分镜图 · ${script.title}`,
-          storyboard: { rows, cols, ratio: DEFAULT_RATIO, showIndex: true, cells },
-          scriptSourceId: scriptId,
-        },
-      };
+      const { containerNode: groupNode, memberPositions } = buildContainer({
+        mode: "frameGroup",
+        cellKind: "image",
+        containerId: groupId,
+        name: `分镜图 · ${script.title}`,
+        memberIds: memberMeta.map((m) => m.id),
+        origin: { x: groupX, y: groupY },
+        members: memberMeta.map((m) => ({ id: m.id, kind: "image" as NodeKind, name: m.name })),
+        groupColor: "#0EA5E9",
+      });
+
+      const imageNodes: CanvasNode[] = memberMeta.map((m) => {
+        const cell = memberPositions.get(m.id)!;
+        return {
+          id: m.id,
+          kind: "image",
+          x: cell.x,
+          y: cell.y,
+          data: {
+            name: m.name,
+            src: m.src,
+            status: "ready",
+          },
+        };
+      });
 
       const edge: Edge = {
         id: `edge-script-sb-${ts}`,
         from: scriptId,
-        to: sbId,
+        to: groupId,
         sourceHandle: "out",
-        toHandle: "sb-in",
+        toHandle: "group-in",
       };
 
+      // Per-shot reference edges: each storyboard image wires back to the asset
+      // images its shot @mentions, so you can see which assets feed which shot.
+      const refEdges = buildReferenceEdges(
+        nodes,
+        scriptId,
+        script,
+        selectedShots.map((shot, i) => ({ shot, memberId: imageNodes[i].id })),
+      );
+
       set((s) => ({
-        nodes: [...s.nodes, sbNode],
-        edges: [...s.edges, edge],
-        selectedId: sbId,
+        nodes: [groupNode, ...s.nodes, ...imageNodes],
+        edges: [...s.edges, edge, ...refEdges],
+        selectedId: groupId,
       }));
+    },
+
+    // Rebuild the per-shot reference edges (asset image → storyboard/video shot)
+    // for a script's already-generated downstream groups. Idempotent and safe to
+    // call on load — this back-fills the edges for groups that were created
+    // before this wiring existed (members are mapped to shots by the 镜号 in
+    // their name, e.g. "镜 3" / "分镜视频-#3").
+    reconcileShotReferenceEdges: (scriptId: string) => {
+      const { nodes, edges } = get();
+      const scriptNode = nodes.find((n) => n.id === scriptId);
+      if (!scriptNode || scriptNode.kind !== "script") return;
+      const script = scriptNode.data.script;
+
+      // Downstream groups = those the script points at (script → group).
+      const groupIds = edges
+        .filter((e) => e.from === scriptId && e.toHandle === "group-in")
+        .map((e) => e.to);
+
+      const pairs: { shot: ScriptShot; memberId: string }[] = [];
+      const matchedIds = new Set<string>(); // members mapped to a shot (get ref edges)
+      const allMemberIds = new Set<string>(); // every downstream-group member
+      for (const gid of groupIds) {
+        const group = nodes.find((n) => n.id === gid);
+        if (!group || group.kind !== "nodeGroup") continue;
+        for (const mid of group.data.memberIds ?? []) {
+          const member = nodes.find((n) => n.id === mid);
+          if (!member || (member.kind !== "image" && member.kind !== "generateVideo")) continue;
+          allMemberIds.add(mid);
+          const idxMatch = (member.data.name ?? "").match(/(\d+)/);
+          if (!idxMatch) continue;
+          const shot = script.shots.find((sh) => sh.index === Number(idxMatch[1]));
+          if (!shot) continue;
+          pairs.push({ shot, memberId: mid });
+          matchedIds.add(mid);
+        }
+      }
+      if (allMemberIds.size === 0) return;
+
+      const refEdges = buildReferenceEdges(nodes, scriptId, script, pairs);
+      // Two cleanups, then add the fresh ref edges:
+      //  - stray `script → member`: the script's output must only feed the GROUP
+      //    (group-in), never a member directly. These show up as extra lines out
+      //    of the script node.
+      //  - stale ref edges for the processed members (rebuilt below).
+      const isScriptToMember = (e: Edge) => e.from === scriptId && allMemberIds.has(e.to);
+      const isStaleRef = (e: Edge) => e.id.startsWith("edge-ref-") && matchedIds.has(e.to);
+      const kept = edges.filter((e) => !isScriptToMember(e) && !isStaleRef(e));
+      const existing = new Set(kept.map((e) => e.id));
+      const merged = [...kept, ...refEdges.filter((e) => !existing.has(e.id))];
+      set({ edges: merged });
+    },
+
+    // Re-space the members of a script's downstream frame groups (分镜图组/视频组)
+    // onto the shared grid and resize the frame. Idempotent — back-fills the
+    // tidier spacing for groups generated with the old cramped constants, so
+    // existing projects fix themselves on load without regenerating.
+    relayoutShotGroups: (scriptId: string) => {
+      const { nodes, edges } = get();
+      const scriptNode = nodes.find((n) => n.id === scriptId);
+      if (!scriptNode || scriptNode.kind !== "script") return;
+
+      const groupIds = edges
+        .filter((e) => e.from === scriptId && e.toHandle === "group-in")
+        .map((e) => e.to);
+      if (groupIds.length === 0) return;
+
+      set((s) => {
+        const byId = new Map(s.nodes.map((n) => [n.id, n]));
+        const moved = new Map<string, { x: number; y: number }>();
+        const resized = new Map<string, { groupWidth: number; groupHeight: number }>();
+
+        for (const gid of groupIds) {
+          const group = byId.get(gid);
+          if (!group || group.kind !== "nodeGroup" || !group.data.frame) continue;
+          const memberIds = group.data.memberIds ?? [];
+          const members = memberIds.map((id) => byId.get(id)).filter((n): n is CanvasNode => !!n);
+          if (members.length === 0) continue;
+
+          const isVideo = members.every((m) => m.kind === "generateVideo");
+          const cellW = isVideo ? VID_W : IMG_W;
+          const cellH = isVideo ? VID_H : IMG_H;
+          const { cols, groupW, groupH } = frameGroupBox(members.length, cellW, cellH);
+          const baseX = group.x + FRAME_PAD;
+          const baseY = group.y + FRAME_PAD + FRAME_HEADER;
+
+          members.forEach((m, i) => {
+            const cell = gridCell(i, cols, {
+              baseX,
+              baseY,
+              cellW,
+              cellH,
+              gapX: FRAME_GAP_X,
+              gapY: FRAME_GAP_Y,
+            });
+            moved.set(m.id, cell);
+          });
+          resized.set(gid, { groupWidth: groupW, groupHeight: groupH });
+        }
+
+        if (moved.size === 0 && resized.size === 0) return {};
+        return {
+          nodes: s.nodes.map((n) => {
+            const pos = moved.get(n.id);
+            if (pos) return { ...n, x: pos.x, y: pos.y };
+            const dim = resized.get(n.id);
+            if (dim && n.kind === "nodeGroup") {
+              return { ...n, data: { ...n.data, ...dim } };
+            }
+            return n;
+          }),
+        };
+      });
     },
   };
 }

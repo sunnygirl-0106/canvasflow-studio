@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { X, ChevronDown, ArrowUp, Loader2, Sparkles, ImageIcon } from "lucide-react";
 import type { ScriptShot } from "@/store/types";
 import { characterGroupCount } from "@/lib/scriptColumns";
@@ -188,7 +189,7 @@ export function GenerateStoryboardDialog({
                 {Array.from({ length: charCount }, (_, i) => (
                   <td key={`ci-${i}`} style={{ padding: "12px 8px" }}>
                     {shot.characters[i]?.image ? (
-                      <img
+                      <DemoImg
                         src={shot.characters[i].image}
                         alt=""
                         style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 6 }}

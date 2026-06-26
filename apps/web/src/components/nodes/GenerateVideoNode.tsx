@@ -1,8 +1,12 @@
 import { Handle, Position } from "@xyflow/react";
+import { DemoImg } from "@/components/DemoImg";
 import { memo, useRef, useState } from "react";
 import { Video, Upload, Play, Eye, Loader2 } from "lucide-react";
 import { useCanvas, type GenerateVideoNodeData, type CanvasNode } from "@/store/canvasStore";
 import { VideoPromptPanel } from "@/components/VideoPromptPanel";
+import { useStoryboardMembership } from "@/lib/useStoryboardMembership";
+import { useIsMultiSelected } from "@/lib/useIsMultiSelected";
+import { ShotIndexBadge } from "./ShotIndexBadge";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
 
 const WIDTH = 480;
@@ -24,6 +28,13 @@ function GenerateVideoNodeImpl({
   const [hover, setHover] = useState(false);
   const status = data.status ?? (data.src ? "ready" : "empty");
   const progress = data.progress ?? 0;
+  const slot = useStoryboardMembership(id);
+  // Hide this node's prompt panel while multi-selecting (see useIsMultiSelected).
+  const multiSelected = useIsMultiSelected();
+  const soloSelected = !!selected && !multiSelected;
+
+  // A storyboard member renders at its FULL size (no thumbnail shrink) — the
+  // container only repositions it. The shot-index badge is overlaid below.
 
   const onUploadClick = () => fileRef.current?.click();
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,6 +53,8 @@ function GenerateVideoNodeImpl({
       onMouseLeave={() => setHover(false)}
     >
       <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={onFile} />
+
+      {slot?.showIndex && <ShotIndexBadge label={slot.label} />}
 
       {/* Header row */}
       <div className="flex items-center justify-between" style={{ padding: "0 4px 8px 4px" }}>
@@ -162,7 +175,7 @@ function GenerateVideoNodeImpl({
 
           {status === "ready" && data.src && (
             <>
-              <img src={data.src} alt="" className="w-full h-full object-cover" draggable={false} />
+              <DemoImg src={data.src} alt="" className="w-full h-full object-cover" draggable={false} />
               {hover && (
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
                   <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
@@ -198,7 +211,7 @@ function GenerateVideoNodeImpl({
           Rendered inline so it inherits the viewport zoom transform, instead
           of NodeToolbar which positions in screen-space and stays a fixed
           size as the user zooms. */}
-      {selected && (
+      {soloSelected && (
         <div
           className="nodrag nowheel"
           style={{

@@ -1,4 +1,5 @@
 import { Play, Pause, X } from "lucide-react";
+import { DemoImg } from "@/components/DemoImg";
 import { clipAt, type Track } from "@/store/canvasStore";
 import { CLIP_STYLES } from "@/lib/clipStyles";
 import { fmtSec } from "@/lib/time";
@@ -40,7 +41,7 @@ export function FullscreenPlayer({
       {/* Video area */}
       <div className="flex-1 min-h-0 flex items-center justify-center relative overflow-hidden">
         {base?.thumbnail ? (
-          <img
+          <DemoImg
             src={base.thumbnail}
             alt=""
             className="w-full h-full object-contain"
@@ -65,7 +66,7 @@ export function FullscreenPlayer({
               boxShadow: "0 8px 28px rgba(0,0,0,0.6)",
             }}
           >
-            <img
+            <DemoImg
               src={pip.thumbnail}
               alt=""
               className="w-full h-full object-cover"

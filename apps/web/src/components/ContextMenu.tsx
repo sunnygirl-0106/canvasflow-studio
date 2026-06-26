@@ -15,6 +15,7 @@ import {
   RefreshCw,
   type LucideIcon,
 } from "lucide-react";
+import { useReactFlow } from "@xyflow/react";
 import { useCanvas, type CanvasNode, type NodeKind } from "@/store/canvasStore";
 import { ConfirmDialog } from "@/components/storyboard/ConfirmDialog";
 
@@ -200,6 +201,9 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
   const canUndo = useCanvas((s) => s.past.length > 0);
   const undo = useCanvas((s) => s.undo);
   const removeNode = useCanvas((s) => s.removeNode);
+  const copyNodes = useCanvas((s) => s.copyNodes);
+  const pasteNodes = useCanvas((s) => s.pasteNodes);
+  const hasClipboard = useCanvas((s) => (s.clipboard?.length ?? 0) > 0);
   const addToComposition = useCanvas((s) => s.addToComposition);
   const duplicateStoryboard = useCanvas((s) => s.duplicateStoryboard);
   const convertGroupToStoryboard = useCanvas((s) => s.convertGroupToStoryboard);
@@ -211,8 +215,13 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
   const updateNode = useCanvas((s) => s.updateNode);
   const select = useCanvas((s) => s.select);
   const setAddPanel = useCanvas((s) => s.setAddPanel);
+  const { screenToFlowPosition } = useReactFlow();
 
   const uploadImage = () => {
+    // Anchor the new node to where the user right-clicked (screen→flow).
+    // Capture it synchronously — the menu closes before the async file pick.
+    const screen = menu ? { x: menu.x, y: menu.y } : { x: 600, y: 200 };
+    const pos = screenToFlowPosition(screen);
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -220,7 +229,7 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
       const file = input.files?.[0];
       if (!file) return;
       const url = URL.createObjectURL(file);
-      const id = addNodeAtPosition("generateImage", 600, 200);
+      const id = addNodeAtPosition("generateImage", pos.x, pos.y);
       updateNode(
         id,
         (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
@@ -324,6 +333,7 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
         label: "复制组",
         shortcut: "⌘C",
         onClick: () => {
+          copyNodes([target.id]);
           close();
         },
       });
@@ -463,7 +473,7 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
         label: "复制节点",
         shortcut: "Ctrl+C",
         onClick: () => {
-          // TODO: hook up copy/clipboard
+          copyNodes([target.id]);
           close();
         },
       });
@@ -474,8 +484,11 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
       icon: Clipboard,
       label: "粘贴",
       shortcut: "Ctrl+V",
-      disabled: true, // not implemented yet
-      onClick: () => close(),
+      disabled: !hasClipboard,
+      onClick: () => {
+        pasteNodes();
+        close();
+      },
     });
 
     // 5. Destructive (node only)
@@ -501,6 +514,9 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
     canUndo,
     undo,
     removeNode,
+    copyNodes,
+    pasteNodes,
+    hasClipboard,
     addToComposition,
     duplicateStoryboard,
     convertGroupToStoryboard,

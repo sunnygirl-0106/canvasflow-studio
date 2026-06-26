@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { GenerateAssetsRequest } from "@canvasflow/shared";
+import { placeholderImage } from "@canvasflow/shared";
 import {
   storageConfigured,
   validateAsset,
@@ -93,7 +94,7 @@ assets.post("/generate", async (c) => {
         event: "asset-done",
         data: JSON.stringify({
           assetId,
-          image: `https://picsum.photos/seed/${assetId}/400/400`,
+          image: placeholderImage(assetId, 400, 400),
         }),
       });
     }

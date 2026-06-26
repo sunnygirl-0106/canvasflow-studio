@@ -1,3 +1,4 @@
+import { placeholderImage } from "@canvasflow/shared";
 import type { CanvasNode, Edge } from "@/store/canvasStore";
 
 export const initialNodes: CanvasNode[] = [
@@ -42,7 +43,7 @@ export const initialNodes: CanvasNode[] = [
     y: 520,
     data: {
       name: "图片1",
-      src: "https://picsum.photos/seed/canvasflow-demo-a/400/225",
+      src: placeholderImage("canvasflow-demo-a", 400, 225),
       status: "ready",
       model: "phan-nano-l",
     },

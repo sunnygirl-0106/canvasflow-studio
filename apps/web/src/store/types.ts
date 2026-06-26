@@ -42,6 +42,8 @@ export interface StoreState {
   editorScriptId: string | null;
   batchVideoSbId: string | null;
   saveStatus: SaveStatus;
+  // In-memory clipboard for 复制 / 粘贴 (deep-cloned node snapshots).
+  clipboard: CanvasNode[] | null;
 
   setProjectName: (n: string) => void;
   loadFromServer: (id: string) => Promise<void>;
@@ -55,6 +57,10 @@ export interface StoreState {
   addNode: (kind: NodeKind) => string;
   addNodeAtPosition: (kind: NodeKind, x: number, y: number) => string;
   removeNode: (id: string) => void;
+  removeNodes: (ids: string[]) => void;
+  duplicateNodes: (ids: string[]) => string[];
+  copyNodes: (ids: string[]) => void;
+  pasteNodes: () => string[];
   addEdge: (from: string, to: string, sourceHandle?: string, toHandle?: string) => void;
   removeEdge: (id: string) => void;
   select: (id: string | null) => void;
@@ -97,7 +103,8 @@ export interface StoreState {
   clearStoryboard: (id: string) => void;
   convertStoryboardToGroup: (id: string) => string | null;
   ungroupStoryboard: (id: string) => void;
-  reorderStoryboardCells: (id: string, fromIdx: number, toIdx: number) => void;
+  reorderStoryboardMembers: (id: string, fromIdx: number, toIdx: number) => void;
+  addStoryboardMember: (id: string, opts?: { src?: string }) => string | null;
   duplicateStoryboard: (id: string) => string | null;
   stitchStoryboard: (id: string, resolution: "2K" | "4K") => Promise<string | null>;
 
@@ -151,6 +158,8 @@ export interface StoreState {
   generateAssets: (id: string, assetIds: string[]) => void;
   cancelAssetGeneration: (id: string, assetId: string) => void;
   materializeAssetGroups: (scriptId: string) => void;
+  reconcileShotReferenceEdges: (scriptId: string) => void;
+  relayoutShotGroups: (scriptId: string) => void;
 
   totalDuration: () => number;
   shotCount: () => number;

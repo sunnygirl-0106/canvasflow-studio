@@ -1,4 +1,4 @@
-import type { StoryboardCell, StoryboardData, AspectRatio } from "@/store/canvasStore";
+import type { AspectRatio } from "@/store/canvasStore";
 
 // ── Auto grid layout (PRD 5.1) ─────────────────────────────────────────────
 
@@ -10,63 +10,10 @@ export function autoGrid(n: number): { rows: number; cols: number } {
   return { rows, cols };
 }
 
-// ── Fill cells ──────────────────────────────────────────────────────────────
-
-/** Fill items into rows*cols grid (row-major). Empty slots get placeholder cells. */
-export function fillCells(
-  items: { src: string; sourceNodeId: string; name?: string }[],
-  rows: number,
-  cols: number,
-): StoryboardCell[] {
-  const total = rows * cols;
-  const cells: StoryboardCell[] = [];
-  for (let i = 0; i < total; i++) {
-    const row = Math.floor(i / cols) + 1;
-    const col = (i % cols) + 1;
-    const item = items[i];
-    cells.push({
-      id: `cell-${row}-${col}-${Date.now()}-${i}`,
-      row,
-      col,
-      src: item?.src,
-      sourceNodeId: item?.sourceNodeId,
-      name: item?.name,
-    });
-  }
-  return cells;
-}
-
-// ── Reflow on grid resize ───────────────────────────────────────────────────
-
-export interface ReflowResult {
-  cells: StoryboardCell[];
-  overflow: { src: string; sourceNodeId: string; name?: string }[];
-}
-
-/** Re-layout cells when rows/cols change. Returns new cells + overflowed items. */
-export function reflow(prev: StoryboardData, rows: number, cols: number): ReflowResult {
-  const filled = prev.cells.filter((c) => c.src != null);
-  const newCapacity = rows * cols;
-
-  const kept = filled.slice(0, newCapacity);
-  const overflowItems = filled.slice(newCapacity).map((c) => ({
-    src: c.src!,
-    sourceNodeId: c.sourceNodeId!,
-    name: c.name,
-  }));
-
-  const cells = fillCells(
-    kept.map((c) => ({ src: c.src!, sourceNodeId: c.sourceNodeId!, name: c.name })),
-    rows,
-    cols,
-  );
-
-  return { cells, overflow: overflowItems };
-}
-
 // ── Label & geometry ────────────────────────────────────────────────────────
 
-export const cellLabel = (cell: StoryboardCell): string => `${cell.row}-${cell.col}`;
+/** 1-based shot number badge for a member at the given 0-based slot index. */
+export const slotLabel = (index: number): string => `${index + 1}`;
 
 const RATIO_MAP: Record<AspectRatio, [number, number]> = {
   "21:9": [21, 9],
@@ -98,18 +45,20 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Stitch all non-empty cells into a single image using an offscreen canvas.
- * Returns a dataURL. On cross-origin failure, falls back to a placeholder grid.
+ * Stitch ordered members into a single image using an offscreen canvas. Members
+ * are placed row-major by `idx`; their live `src` is read by the caller. Returns
+ * a dataURL. On cross-origin failure, falls back to a placeholder grid.
  */
 export async function stitchToDataURL(
-  sb: StoryboardData,
+  items: { src?: string; idx: number }[],
+  grid: { rows: number; cols: number; ratio: AspectRatio; showIndex: boolean },
   resolution: "2K" | "4K",
-): Promise<string> {
+): Promise<{ dataURL: string; width: number; height: number }> {
   const totalW = RESOLUTION_W[resolution];
-  const [rw, rh] = RATIO_MAP[sb.ratio];
-  const cellW = Math.floor(totalW / sb.cols);
+  const [rw, rh] = RATIO_MAP[grid.ratio];
+  const cellW = Math.floor(totalW / grid.cols);
   const cellH = Math.round(cellW * (rh / rw));
-  const totalH = cellH * sb.rows;
+  const totalH = cellH * grid.rows;
   const gap = 4;
 
   const canvas = document.createElement("canvas");
@@ -121,15 +70,15 @@ export async function stitchToDataURL(
 
   let useFallback = false;
 
-  for (const cell of sb.cells) {
-    const col0 = cell.col - 1;
-    const row0 = cell.row - 1;
+  for (const item of items) {
+    const col0 = item.idx % grid.cols;
+    const row0 = Math.floor(item.idx / grid.cols);
     const x = col0 * cellW;
     const y = row0 * cellH;
 
-    if (cell.src) {
+    if (item.src) {
       try {
-        const img = await loadImage(cell.src);
+        const img = await loadImage(item.src);
         // contain fit
         const scale = Math.min((cellW - gap * 2) / img.width, (cellH - gap * 2) / img.height);
         const dw = img.width * scale;
@@ -150,9 +99,9 @@ export async function stitchToDataURL(
     ctx.lineWidth = 1;
     ctx.strokeRect(x, y, cellW, cellH);
 
-    // Index label
-    if (sb.showIndex) {
-      const label = `${cell.row}-${cell.col}`;
+    // Index label (1-based shot number)
+    if (grid.showIndex) {
+      const label = slotLabel(item.idx);
       ctx.font = `bold ${Math.max(12, cellW * 0.06)}px Inter, system-ui`;
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       const tm = ctx.measureText(label);
@@ -169,10 +118,10 @@ export async function stitchToDataURL(
     if (useFallback) {
       console.warn("stitchToDataURL: some images fell back to placeholders (cross-origin)");
     }
-    return url;
+    return { dataURL: url, width: totalW, height: totalH };
   } catch {
     // Canvas tainted — full fallback
     console.warn("stitchToDataURL: canvas tainted, returning fallback");
-    return canvas.toDataURL("image/png");
+    return { dataURL: canvas.toDataURL("image/png"), width: totalW, height: totalH };
   }
 }

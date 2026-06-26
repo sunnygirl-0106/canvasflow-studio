@@ -26,6 +26,7 @@ import {
   type GroupNodeData,
   type TextNodeData,
   type ScriptNodeData,
+  type DirectorNodeData,
 } from "@/store/canvasStore";
 import { Toolbar } from "@/components/Toolbar";
 import { BottomDock } from "@/components/BottomDock";
@@ -39,6 +40,7 @@ import { StoryboardGroupNode } from "@/components/nodes/StoryboardGroupNode";
 import { GroupNode } from "@/components/nodes/GroupNode";
 import { TextNode } from "@/components/nodes/TextNode";
 import { ScriptNode } from "@/components/nodes/ScriptNode";
+import { DirectorNode } from "@/components/nodes/DirectorNode";
 import { LeftRail } from "@/components/LeftRail";
 import { MultiSelectionCTA } from "@/components/MultiSelectionCTA";
 import { CompositionCoachToast } from "@/components/CompositionCoachToast";
@@ -117,6 +119,9 @@ const nodeTypes = {
   nodeGroup: (props: NodeProps) => <GroupNode id={props.id} data={props.data as GroupNodeData} />,
   text: (props: NodeProps) => <TextNode id={props.id} data={props.data as TextNodeData} />,
   script: (props: NodeProps) => <ScriptNode id={props.id} data={props.data as ScriptNodeData} />,
+  director: (props: NodeProps) => (
+    <DirectorNode id={props.id} data={props.data as DirectorNodeData} />
+  ),
 };
 
 function Canvas() {
@@ -385,6 +390,10 @@ function Canvas() {
         panOnScroll={false}
         panOnDrag={[1, 2]}
         selectionOnDrag
+        // Containers (storyboard / frame groups) are painted behind their real
+        // member nodes via array order. Elevating a selected node would lift the
+        // container above its members and hide them — keep z-order stable.
+        elevateNodesOnSelect={false}
       >
         <Background
           variant={BackgroundVariant.Dots}

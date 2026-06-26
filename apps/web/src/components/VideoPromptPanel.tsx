@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { MonitorPlay, Sparkles, ArrowUp, ChevronDown, Plus } from "lucide-react";
 import {
   useCanvas,
@@ -6,6 +7,7 @@ import {
   type GenerateVideoNodeData,
   type VideoMode,
 } from "@/store/canvasStore";
+import { placeholderImage } from "@canvasflow/shared";
 import { estimateVideoCost } from "@/lib/cost";
 import { useNodePatch } from "@/lib/useNodePatch";
 import { useMockGenerate } from "@/lib/useMockGenerate";
@@ -63,7 +65,7 @@ export function VideoPromptPanel({ nodeId }: { nodeId: string }) {
   const onSend = () => {
     if (data.status === "generating") return;
     const seed = Math.random().toString(36).slice(2, 8);
-    runGenerate(2200, () => ({ src: `https://picsum.photos/seed/${seed}/640/360` }));
+    runGenerate(2200, () => ({ src: placeholderImage(seed, 640, 360) }));
   };
 
   return (
@@ -113,7 +115,7 @@ export function VideoPromptPanel({ nodeId }: { nodeId: string }) {
               style={{ padding: "3px 10px 3px 3px", background: "#2A2D33" }}
             >
               {refThumb ? (
-                <img
+                <DemoImg
                   src={refThumb}
                   alt=""
                   draggable={false}

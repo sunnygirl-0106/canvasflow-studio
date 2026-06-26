@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { X, MoreHorizontal } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 import { ImagePickerModal } from "./ImagePickerModal";
@@ -71,7 +72,7 @@ export function AssetEditSidebar({ nodeId, assetId, onClose }: Props) {
             }}
           >
             {asset.image ? (
-              <img
+              <DemoImg
                 src={asset.image}
                 alt={asset.name}
                 className="w-full h-full object-cover"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { ArrowRight, Plus, User, Mountain, Box, Info, Loader2 } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 import type { ScriptData, ScriptAsset } from "@/store/types";
@@ -216,7 +217,7 @@ function AssetCard({
         }}
       >
         {asset.image ? (
-          <img
+          <DemoImg
             src={asset.image}
             alt={asset.name}
             className="w-full h-full object-cover"

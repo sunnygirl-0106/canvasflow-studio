@@ -139,9 +139,9 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
       className="fade-in group relative rounded-2xl overflow-visible"
       style={{
         width: SCRIPT_NODE_WIDTH,
-        background: "#FFFFFF",
-        border: "1px solid #E5E5E5",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+        background: "#1F2125",
+        border: "1px solid #2A2D33",
+        boxShadow: "0 18px 36px rgba(0,0,0,0.45)",
       }}
     >
       {/* Input handle — left */}
@@ -156,12 +156,12 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
       <div className="flex items-center gap-2" style={{ padding: "14px 20px 10px" }}>
         <FileText
           className="w-[18px] h-[18px] flex-shrink-0"
-          style={{ color: "#374151" }}
+          style={{ color: "#9CA3AF" }}
           strokeWidth={1.8}
         />
         <span
           className="text-[15px] font-semibold truncate"
-          style={{ color: "#1F2937", fontFamily: "PingFang SC, Inter, system-ui" }}
+          style={{ color: "#E5E7EB", fontFamily: "PingFang SC, Inter, system-ui" }}
         >
           {headerTitle}
         </span>
@@ -191,9 +191,8 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
           <div
             className="rounded-xl overflow-hidden"
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #E5E5E5",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+              background: "#15171A",
+              border: "1px solid #2A2D33",
             }}
           >
             {/* Top row: script badge + shot thumbnails (thumbnails only after wizard complete) */}
@@ -203,13 +202,13 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
               {totalMountCount > 0 && (
                 <div
                   className="inline-flex items-center justify-center rounded-lg relative flex-shrink-0"
-                  style={{ width: 36, height: 36, background: "#F3F4F6" }}
+                  style={{ width: 36, height: 36, background: "#2A2D33" }}
                   title={[
                     ...connectedTextMounts.map((m) => `剧本：${m.name}`),
                     ...connectedAssetGroupMounts.map((m) => `资产组：${m.name}`),
                   ].join("\n")}
                 >
-                  <ListOrdered className="w-4 h-4" style={{ color: "#6B7280" }} strokeWidth={1.8} />
+                  <ListOrdered className="w-4 h-4" style={{ color: "#9CA3AF" }} strokeWidth={1.8} />
                   <span
                     className="absolute -top-1 -right-1 flex items-center justify-center rounded-full text-white text-[10px] font-bold"
                     style={{ width: 16, height: 16, background: "#6366F1" }}
@@ -228,10 +227,10 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
             {/* Textarea */}
             <div style={{ padding: "10px 14px" }}>
               <textarea
-                className="w-full text-[14px] outline-none resize-none"
+                className="nodrag nowheel w-full text-[14px] outline-none resize-none"
                 style={{
                   minHeight: 48,
-                  color: "#1F2937",
+                  color: "#E5E7EB",
                   fontFamily: "PingFang SC, Inter, system-ui",
                   background: "transparent",
                 }}
@@ -253,7 +252,7 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
             {/* Bottom toolbar */}
             <div
               className="flex items-center justify-between"
-              style={{ padding: "8px 14px", borderTop: "1px solid #F3F4F6" }}
+              style={{ padding: "8px 14px", borderTop: "1px solid #2A2D33" }}
             >
               {/* Left: model selector with icon */}
               <div className="flex items-center gap-1.5">
@@ -262,7 +261,7 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
                   height="18"
                   viewBox="0 0 24 24"
                   fill="none"
-                  style={{ color: "#6B7280", flexShrink: 0 }}
+                  style={{ color: "#56C7CF", flexShrink: 0 }}
                 >
                   <path
                     d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
@@ -272,7 +271,7 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
                 <select
                   className="appearance-none text-[13px] font-medium outline-none cursor-pointer bg-transparent"
                   style={{
-                    color: "#374151",
+                    color: "#E5E7EB",
                     fontFamily: "PingFang SC, Inter, system-ui",
                     paddingRight: 16,
                   }}
@@ -309,12 +308,13 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
                   <span>{script.shots.length || 6}</span>
                 </div>
                 <button
-                  className="flex items-center justify-center text-white transition-opacity disabled:opacity-30"
+                  className="flex items-center justify-center transition-opacity"
                   style={{
                     width: 32,
                     height: 32,
                     borderRadius: "50%",
-                    background: canGenerate ? "#1F2937" : "#D1D5DB",
+                    background: canGenerate ? "#FFFFFF" : "#2A2D33",
+                    color: canGenerate ? "#15171A" : "#6B7280",
                   }}
                   disabled={!canGenerate}
                   onClick={handleGenerate}
@@ -367,9 +367,9 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
           className="flex items-center rounded-2xl"
           style={{
             padding: "6px 10px",
-            background: "#FFFFFF",
-            border: "1px solid #E2E8F0",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+            background: "#1F2125",
+            border: "1px solid #2A2D33",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
           }}
         >
           {isReady && (
@@ -389,14 +389,14 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
               />
               <span
                 className="inline-block mx-1"
-                style={{ width: 1, height: 18, background: "#E2E8F0" }}
+                style={{ width: 1, height: 18, background: "#2A2D33" }}
               />
               <button
                 className="flex items-center justify-center rounded-lg"
                 style={{
                   width: 32,
                   height: 32,
-                  color: script.shots.length ? "#334155" : "#CBD5E1",
+                  color: script.shots.length ? "#E5E7EB" : "#4B5563",
                   cursor: script.shots.length ? "pointer" : "not-allowed",
                 }}
                 disabled={!script.shots.length}

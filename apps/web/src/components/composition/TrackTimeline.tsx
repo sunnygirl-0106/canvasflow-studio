@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { DemoImg } from "@/components/DemoImg";
 import { Plus, Volume2, VolumeX, Play, Music } from "lucide-react";
 import {
   useCanvas,
@@ -458,7 +459,7 @@ export function TrackTimeline({
           <div className="absolute inset-0 overflow-hidden rounded-md" style={{ top: 20 }}>
             <div className="flex h-full" style={{ opacity: 0.35 }}>
               {Array.from({ length: Math.max(1, Math.ceil(w / 60)) }).map((_, ti) => (
-                <img
+                <DemoImg
                   key={ti}
                   src={clip.thumbnail!}
                   alt=""

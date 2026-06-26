@@ -1,4 +1,5 @@
 import { Handle, Position } from "@xyflow/react";
+import { DemoImg } from "@/components/DemoImg";
 import { memo, useMemo } from "react";
 import { FolderOpen, Loader2, Play } from "lucide-react";
 import { useCanvas, type CanvasNode, type GroupNodeData, type NodeKind } from "@/store/canvasStore";
@@ -147,7 +148,7 @@ function GroupNodeImpl({ data }: { id: string; data: GroupNodeData }) {
                   </span>
                 </div>
                 {m.src ? (
-                  <img
+                  <DemoImg
                     src={m.src}
                     alt=""
                     className="w-full"
@@ -191,7 +192,7 @@ function GroupNodeImpl({ data }: { id: string; data: GroupNodeData }) {
                 }}
               >
                 {m.src && (
-                  <img
+                  <DemoImg
                     src={m.src}
                     alt=""
                     className="w-full"
@@ -228,18 +229,24 @@ function GroupNodeImpl({ data }: { id: string; data: GroupNodeData }) {
         </div>
       )}
 
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="group-in"
-        style={{ background: isVideoGroup ? "#14B8A6" : color }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="group-out"
-        style={{ background: isVideoGroup ? "#14B8A6" : color }}
-      />
+      {/* Asset groups set connectable:false — they're a visual frame only; the
+          real edges run from each member image to the script, not the group. */}
+      {data.connectable !== false && (
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            id="group-in"
+            style={{ background: isVideoGroup ? "#14B8A6" : color }}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="group-out"
+            style={{ background: isVideoGroup ? "#14B8A6" : color }}
+          />
+        </>
+      )}
     </div>
   );
 }

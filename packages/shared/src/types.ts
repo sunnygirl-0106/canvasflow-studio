@@ -11,7 +11,8 @@ export type NodeKind =
   | "nodeGroup"
   | "storyboard"
   | "text"
-  | "script";
+  | "script"
+  | "director";
 
 // ── Track / Clip ────────────────────────────────────────────────────────────
 
@@ -51,6 +52,8 @@ export const MAX_VIDEO_TRACKS = 2;
 
 export type AspectRatio = "21:9" | "16:9" | "9:16" | "3:4" | "4:3" | "1:1";
 
+/** @deprecated Virtual-cell model. Kept only for migrating old saves into the
+ *  real-node container model (see `StoryboardData.memberIds`). Do not write. */
 export interface StoryboardCell {
   id: string;
   row: number;
@@ -65,7 +68,17 @@ export interface StoryboardData {
   cols: number;
   ratio: AspectRatio;
   showIndex: boolean;
-  cells: StoryboardCell[];
+  // Ordered member node ids (order = storyboard shot number 1..N). The single
+  // source of truth: a storyboard is a real container wrapping these real
+  // canvas nodes, laid out at grid slots. The members render their own live
+  // `src` (cover-cropped to `ratio`); nothing is snapshotted here.
+  memberIds: string[];
+  // Name/kind snapshot, mirrors `GroupNodeData.members` — used to rebuild a
+  // member or render a name fallback when the real node is gone.
+  members?: { id: string; kind: NodeKind; name?: string }[];
+  // @deprecated Migration-only. Old saves stored the grid contents here; new
+  // writes use `memberIds`. `sanitizeNodes` migrates `cells` → real nodes.
+  cells?: StoryboardCell[];
 }
 
 export const STORYBOARD_RATIOS: AspectRatio[] = [
@@ -79,7 +92,7 @@ export const STORYBOARD_RATIOS: AspectRatio[] = [
 export const STORYBOARD_PRESETS = [2, 3, 4, 5];
 export const STORYBOARD_MAX = 10;
 export const STORYBOARD_CELL_PX = 220;
-export const STORYBOARD_GAP_PX = 8;
+export const STORYBOARD_GAP_PX = 16;
 export const DEFAULT_RATIO: AspectRatio = "16:9";
 
 // ── Script ──────────────────────────────────────────────────────────────────
@@ -210,6 +223,9 @@ export interface ImageNodeData extends NodeDataBase {
   useMainImage?: boolean;
   estimatedCost?: number;
   progress?: number;
+  // Intrinsic pixel size, shown as a "W × H" badge (e.g. stitch results).
+  width?: number;
+  height?: number;
   // When this image node was materialized from a script's asset, these link it
   // back to the source asset so the store can keep its `src` in sync when the
   // asset is regenerated. Cleared if the asset group is ungrouped (detached).
@@ -272,6 +288,10 @@ export interface GroupNodeData extends NodeDataBase {
   frame?: boolean;
   // For asset groups: the script node this group's assets belong to.
   sourceScriptId?: string;
+  // `connectable: false` → the group is purely a visual container with no
+  // connection handles. Used by the asset group: grouping is only for visual
+  // distinction; the real connections run from each member image to the script.
+  connectable?: boolean;
 }
 
 export interface StoryboardNodeData extends NodeDataBase {
@@ -287,6 +307,17 @@ export interface ScriptNodeData extends NodeDataBase {
   script: ScriptData;
 }
 
+export interface DirectorNodeData extends NodeDataBase {
+  // Placeholder card only for now — the 3D director stage opens elsewhere.
+  description?: string;
+  /**
+   * Panorama screenshot captured from the 3D director stage. The stage only
+   * accepts 2:1 scenes, so this image is always 2:1. When present the node
+   * renders the panorama thumbnail instead of the empty placeholder.
+   */
+  panorama?: string;
+}
+
 export type ImageNode = NodeBase & { kind: "image"; data: ImageNodeData };
 export type GenerateImageNode = NodeBase & { kind: "generateImage"; data: GenerateImageNodeData };
 export type GenerateVideoNode = NodeBase & { kind: "generateVideo"; data: GenerateVideoNodeData };
@@ -296,6 +327,7 @@ export type GroupNode = NodeBase & { kind: "nodeGroup"; data: GroupNodeData };
 export type StoryboardNode = NodeBase & { kind: "storyboard"; data: StoryboardNodeData };
 export type TextNode = NodeBase & { kind: "text"; data: TextNodeData };
 export type ScriptNode = NodeBase & { kind: "script"; data: ScriptNodeData };
+export type DirectorNode = NodeBase & { kind: "director"; data: DirectorNodeData };
 
 export type CanvasNode =
   | ImageNode
@@ -306,7 +338,8 @@ export type CanvasNode =
   | GroupNode
   | StoryboardNode
   | TextNode
-  | ScriptNode;
+  | ScriptNode
+  | DirectorNode;
 
 // ── Loose node data — union of all node data types.
 // Useful for React components that receive `data` from ReactFlow before narrowing.
@@ -319,7 +352,8 @@ export type AnyNodeData =
   | GroupNodeData
   | StoryboardNodeData
   | TextNodeData
-  | ScriptNodeData;
+  | ScriptNodeData
+  | DirectorNodeData;
 
 // ── Edge ────────────────────────────────────────────────────────────────────
 
@@ -460,6 +494,7 @@ export const NODE_DEFAULT_NAMES: Record<NodeKind, string> = {
   storyboard: "分镜组",
   text: "剧本",
   script: "未命名脚本",
+  director: "导演台",
 };
 
 // ── API types ───────────────────────────────────────────────────────────────

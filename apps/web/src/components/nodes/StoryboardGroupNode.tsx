@@ -1,125 +1,162 @@
-import { memo, useCallback, useRef, useState } from "react";
-import { Handle, Position } from "@xyflow/react";
-import { Grid3X3, ChevronDown, ArrowUp, Loader2, Sparkles, Clapperboard } from "lucide-react";
-import type { StoryboardNodeData, StoryboardCell } from "@/store/canvasStore";
-import { STORYBOARD_CELL_PX, STORYBOARD_GAP_PX, useCanvas } from "@/store/canvasStore";
-import { cellSize, cellLabel } from "@/lib/storyboard";
+import { memo, useRef, useState } from "react";
+import {
+  ChevronDown,
+  ArrowUp,
+  Loader2,
+  Sparkles,
+  Clapperboard,
+  Plus,
+  Upload,
+  ImageIcon,
+} from "lucide-react";
+import { placeholderImage } from "@canvasflow/shared";
+import type { StoryboardNodeData } from "@/store/canvasStore";
+import { useCanvas } from "@/store/canvasStore";
+import {
+  storyboardSlotSize,
+  storyboardSize,
+  SB_PAD_X,
+  SB_HEADER_H,
+  SB_PAD_BOTTOM,
+  SB_CELL_GAP_X,
+  SB_CELL_GAP_Y,
+} from "@/lib/container";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
+
+// Dark-theme container palette (matches the node body cards).
+const SB_BG = "#1B1D21";
+const SB_BORDER = "#2E3138";
+const SB_CELL_EMPTY = "#161719";
+const SB_CELL_BORDER = "#26282D";
+const SB_PLUS = "#4B5563";
+const SB_TITLE = "#9CA3AF";
 
 export const StoryboardGroupNode = memo(StoryboardGroupNodeImpl);
 
 function StoryboardGroupNodeImpl({ id, data }: { id: string; data: StoryboardNodeData }) {
   const sb = data.storyboard;
-  const reorderCells = useCanvas((s) => s.reorderStoryboardCells);
   const batchVideoSbId = useCanvas((s) => s.batchVideoSbId);
   const setBatchVideoSbId = useCanvas((s) => s.setBatchVideoSbId);
   const batchGenerateVideo = useCanvas((s) => s.batchGenerateVideo);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const addMember = useCanvas((s) => s.addStoryboardMember);
   const [generating, setGenerating] = useState(false);
-  const dragFromIdx = useRef<number | null>(null);
-
-  const onCellDragStart = useCallback((idx: number) => {
-    dragFromIdx.current = idx;
-  }, []);
-
-  const onCellDragOver = useCallback((e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOverIdx(idx);
-  }, []);
-
-  const onCellDrop = useCallback(
-    (e: React.DragEvent, toIdx: number) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const fromIdx = dragFromIdx.current;
-      if (fromIdx != null && fromIdx !== toIdx) {
-        reorderCells(id, fromIdx, toIdx);
-      }
-      dragFromIdx.current = null;
-      setDragOverIdx(null);
-    },
-    [id, reorderCells],
-  );
-
-  const onCellDragEnd = useCallback(() => {
-    dragFromIdx.current = null;
-    setDragOverIdx(null);
-  }, []);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   if (!sb) return null;
 
-  const { rows, cols, ratio, showIndex, cells } = sb;
-  const { w: cw, h: ch } = cellSize(ratio, STORYBOARD_CELL_PX);
-  const gap = STORYBOARD_GAP_PX;
-  const totalW = cols * cw + (cols - 1) * gap + 32;
-  const filledCount = cells.filter((c) => c.src).length;
+  const { rows, cols, ratio, memberIds } = sb;
+  const { w: cw, h: ch } = storyboardSlotSize(ratio);
+  const { width } = storyboardSize(rows, cols, ratio);
+  const filledCount = memberIds.length;
+  const total = rows * cols;
+  // The first empty slot doubles as the "append" affordance.
+  const appendIdx = filledCount < total ? filledCount : -1;
+
+  // Position of the append cell (relative to the container), to anchor the menu.
+  const appendCol = appendIdx >= 0 ? appendIdx % cols : 0;
+  const appendRow = appendIdx >= 0 ? Math.floor(appendIdx / cols) : 0;
+  const appendX = SB_PAD_X + appendCol * (cw + SB_CELL_GAP_X) + cw / 2;
+  const appendY = SB_HEADER_H + appendRow * (ch + SB_CELL_GAP_Y) + ch / 2;
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) addMember(id, { src: URL.createObjectURL(file) });
+    e.target.value = "";
+    setMenuOpen(false);
+  };
 
   return (
     <div
-      className="fade-in group relative rounded-2xl overflow-visible"
+      className="fade-in group relative overflow-visible"
       style={{
-        width: totalW,
-        background: "#FFFFFF",
-        border: `2px solid ${COLORS.border}`,
-        boxShadow: "0 18px 36px rgba(152,162,179,0.10)",
+        width,
+        background: SB_BG,
+        borderRadius: 14,
+        // Inset ring instead of a border so it doesn't shift the content box —
+        // keeps the grid cells pixel-aligned with the absolutely-positioned members.
+        boxShadow: `inset 0 0 0 1px ${SB_BORDER}, 0 18px 40px rgba(0,0,0,0.35)`,
       }}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="sb-in"
-        style={{ background: COLORS.handle }}
-      />
+      {/* No connection handles — like the asset group (资产组), the storyboard is
+          a purely visual container around its real member nodes. Real edges run
+          from the members, not the container. */}
 
-      {/* Header */}
-      <div className="flex items-center gap-2" style={{ padding: "14px 16px 10px" }}>
-        <Grid3X3
-          className="w-[16px] h-[16px] flex-shrink-0"
-          style={{ color: COLORS.headerText }}
-          strokeWidth={1.8}
-        />
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
+
+      {/* Title — sits OUTSIDE, above the box (like the screenshot). Name and
+          count are separated by a dot so a name ending in a digit (e.g.
+          "分镜组 1") doesn't visually merge with the count ("1" + "5" → "15"). */}
+      <div className="absolute" style={{ top: -26, left: 2 }}>
         <span
-          className="text-[14px] font-semibold truncate"
-          style={{ color: COLORS.headerText, fontFamily: "PingFang SC, Inter, system-ui" }}
+          className="text-[13px] font-medium whitespace-nowrap"
+          style={{ color: SB_TITLE, fontFamily: "PingFang SC, Inter, system-ui" }}
         >
           {data.name ?? "分镜组"}
-        </span>
-        <span
-          className="ml-auto text-[11px] font-medium"
-          style={{ color: COLORS.subtitleText, fontFamily: "Inter, system-ui" }}
-        >
-          {filledCount}/{rows * cols} 格 · {rows}x{cols}
+          <span style={{ margin: "0 6px", opacity: 0.5 }}>·</span>
+          {filledCount} 个节点
         </span>
       </div>
 
-      {/* Grid */}
+      {/* Grid skeleton — empty-slot placeholders. Filled slots are covered by the
+          real member nodes painted on top (this container is behind them). */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${cols}, ${cw}px)`,
           gridTemplateRows: `repeat(${rows}, ${ch}px)`,
-          gap,
-          padding: `0 16px 14px`,
+          gap: `${SB_CELL_GAP_Y}px ${SB_CELL_GAP_X}px`,
+          padding: `${SB_HEADER_H}px ${SB_PAD_X}px ${SB_PAD_BOTTOM}px`,
         }}
       >
-        {cells.map((cell, idx) => (
-          <CellSlot
-            key={cell.id}
-            cell={cell}
-            idx={idx}
-            showIndex={showIndex}
-            w={cw}
-            h={ch}
-            isDragOver={dragOverIdx === idx}
-            hasSrc={!!cell.src}
-            onDragStart={onCellDragStart}
-            onDragOver={onCellDragOver}
-            onDrop={onCellDrop}
-            onDragEnd={onCellDragEnd}
-          />
-        ))}
+        {Array.from({ length: total }, (_, idx) => {
+          const filled = idx < filledCount;
+          const isAppend = idx === appendIdx;
+          return (
+            <div
+              key={idx}
+              className={`rounded-lg flex items-center justify-center ${isAppend ? "nodrag" : ""}`}
+              style={{
+                width: cw,
+                height: ch,
+                background: filled ? "transparent" : SB_CELL_EMPTY,
+                border: filled ? undefined : `1px solid ${SB_CELL_BORDER}`,
+                cursor: isAppend ? "pointer" : "default",
+              }}
+              onClick={
+                isAppend
+                  ? (e) => {
+                      e.stopPropagation();
+                      setMenuOpen(true);
+                    }
+                  : undefined
+              }
+            >
+              {!filled && (
+                <Plus
+                  className="w-6 h-6"
+                  style={{ color: isAppend ? COLORS.muted : SB_PLUS }}
+                  strokeWidth={1.6}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {/* Append menu (从本地上传图片 / 从历史记录中选择) */}
+      {menuOpen && appendIdx >= 0 && (
+        <AddMemberMenu
+          x={appendX}
+          y={appendY}
+          onClose={() => setMenuOpen(false)}
+          onUpload={() => fileRef.current?.click()}
+          onHistory={() => {
+            addMember(id, { src: placeholderImage(`sb-${id}-${filledCount}`, 640, 360) });
+            setMenuOpen(false);
+          }}
+        />
+      )}
 
       {/* Batch video bar */}
       {batchVideoSbId === id && (
@@ -136,14 +173,89 @@ function StoryboardGroupNodeImpl({ id, data }: { id: string; data: StoryboardNod
           }}
         />
       )}
-
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="sb-out"
-        style={{ background: COLORS.handle }}
-      />
     </div>
+  );
+}
+
+function AddMemberMenu({
+  x,
+  y,
+  onClose,
+  onUpload,
+  onHistory,
+}: {
+  x: number;
+  y: number;
+  onClose: () => void;
+  onUpload: () => void;
+  onHistory: () => void;
+}) {
+  return (
+    <>
+      {/* Click-away backdrop */}
+      <div
+        className="fixed inset-0 nodrag"
+        style={{ zIndex: 40 }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      />
+      <div
+        className="absolute nodrag nowheel"
+        style={{
+          left: x,
+          top: y,
+          transform: "translate(-50%, -8px)",
+          zIndex: 50,
+          minWidth: 220,
+          background: "#FFFFFF",
+          borderRadius: 16,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+          padding: 8,
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <MenuRow
+          icon={<Upload className="w-[18px] h-[18px]" strokeWidth={1.8} />}
+          label="从本地上传图片"
+          onClick={onUpload}
+        />
+        <MenuRow
+          icon={<ImageIcon className="w-[18px] h-[18px]" strokeWidth={1.8} />}
+          label="从历史记录中选择"
+          onClick={onHistory}
+        />
+      </div>
+    </>
+  );
+}
+
+function MenuRow({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="w-full flex items-center gap-3 rounded-xl transition-colors hover:bg-gray-100"
+      style={{
+        padding: "12px 14px",
+        color: "#1F2937",
+        fontFamily: "PingFang SC, Inter, system-ui",
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <span style={{ color: "#6B7280" }}>{icon}</span>
+      <span className="text-[15px]">{label}</span>
+    </button>
   );
 }
 
@@ -252,77 +364,4 @@ function BatchVideoBar({
 
 function BarSep() {
   return <span className="inline-block" style={{ width: 1, height: 18, background: "#E2E8F0" }} />;
-}
-
-function CellSlot({
-  cell,
-  idx,
-  showIndex,
-  w,
-  h,
-  isDragOver,
-  hasSrc,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-}: {
-  cell: StoryboardCell;
-  idx: number;
-  showIndex: boolean;
-  w: number;
-  h: number;
-  isDragOver: boolean;
-  hasSrc: boolean;
-  onDragStart: (idx: number) => void;
-  onDragOver: (e: React.DragEvent, idx: number) => void;
-  onDrop: (e: React.DragEvent, idx: number) => void;
-  onDragEnd: () => void;
-}) {
-  return (
-    <div
-      className="relative rounded-lg overflow-hidden flex items-center justify-center nodrag"
-      style={{
-        width: w,
-        height: h,
-        background: isDragOver ? COLORS.dropHighlight : cell.src ? undefined : COLORS.emptyBg,
-        outline: isDragOver ? `2px dashed ${COLORS.border}` : undefined,
-        cursor: hasSrc ? "grab" : "default",
-      }}
-      draggable={hasSrc}
-      onDragStart={(e) => {
-        e.stopPropagation();
-        onDragStart(idx);
-      }}
-      onDragOver={(e) => onDragOver(e, idx)}
-      onDrop={(e) => onDrop(e, idx)}
-      onDragEnd={onDragEnd}
-    >
-      {cell.src ? (
-        <img
-          src={cell.src}
-          alt={cell.name ?? ""}
-          className="w-full h-full pointer-events-none"
-          style={{ objectFit: "cover" }}
-          draggable={false}
-        />
-      ) : (
-        <span className="text-2xl font-light select-none" style={{ color: COLORS.emptyText }}>
-          +
-        </span>
-      )}
-      {showIndex && (
-        <span
-          className="absolute bottom-1 right-1 rounded px-1 py-0.5 text-[10px] font-medium leading-none"
-          style={{
-            background: COLORS.indexBg,
-            color: COLORS.indexText,
-            fontFamily: "Inter, system-ui",
-          }}
-        >
-          {cellLabel(cell)}
-        </span>
-      )}
-    </div>
-  );
 }

@@ -12,8 +12,8 @@ import {
   Download,
   LayoutGrid,
 } from "lucide-react";
-import { useCanvas, STORYBOARD_CELL_PX, STORYBOARD_GAP_PX } from "@/store/canvasStore";
-import { cellSize } from "@/lib/storyboard";
+import { useCanvas } from "@/store/canvasStore";
+import { storyboardSize } from "@/lib/container";
 import { RatioMenu } from "./RatioMenu";
 import { GridSizeMenu } from "./GridSizeMenu";
 import { StitchMenu } from "./StitchMenu";
@@ -74,8 +74,7 @@ export function StoryboardToolbar() {
   const isFromScript = !!selectedSb.data.scriptSourceId;
 
   // Calculate node width in canvas coords, then convert top-center to screen coords
-  const { w: cw } = cellSize(sb.ratio, STORYBOARD_CELL_PX);
-  const nodeW = sb.cols * cw + (sb.cols - 1) * STORYBOARD_GAP_PX + 32;
+  const nodeW = storyboardSize(sb.rows, sb.cols, sb.ratio).width;
   const nodeCenterScreen = flowToScreenPosition({
     x: selectedSb.x + nodeW / 2,
     y: selectedSb.y,
@@ -210,7 +209,7 @@ export function StoryboardToolbar() {
                 onClick={() => setOpenMenu(openMenu === "grid" ? null : "grid")}
                 active={openMenu === "grid"}
               >
-                宫格 {sb.rows}x{sb.cols} <ChevronDown className="w-3 h-3" />
+                宫格 {sb.cols}×{sb.rows} <ChevronDown className="w-3 h-3" />
               </ToolbarButton>
               {openMenu === "grid" && (
                 <GridSizeMenu
