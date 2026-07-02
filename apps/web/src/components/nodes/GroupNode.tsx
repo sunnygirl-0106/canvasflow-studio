@@ -81,17 +81,47 @@ function GroupNodeImpl({ data }: { id: string; data: GroupNodeData }) {
       style={{
         width: isVideoGroup || isImageGroup ? undefined : w,
         height: isVideoGroup || isImageGroup ? undefined : h,
-        background: isVideoGroup || isImageGroup ? "#FFFFFF" : `${color}10`,
+        background:
+          isVideoGroup || isImageGroup
+            ? "#FFFFFF"
+            : frameOnly
+              ? "linear-gradient(180deg, rgba(148,163,184,0.10) 0%, rgba(148,163,184,0.035) 100%)"
+              : `${color}10`,
         border:
           isVideoGroup || isImageGroup
             ? `2px solid ${isImageGroup ? color : "#E2E8F0"}`
-            : `2px dashed ${color}`,
+            : frameOnly
+              ? "1px solid rgba(148,163,184,0.18)"
+              : `2px dashed ${color}`,
         boxShadow: isVideoGroup || isImageGroup ? "0 18px 36px rgba(152,162,179,0.10)" : undefined,
         pointerEvents: "all",
       }}
     >
-      {/* Label badge */}
-      {!isVideoGroup && !isImageGroup && (
+      {/* Frame group (asset / storyboard / video-from-script): plain gray label
+          floating above the soft-gray frame — no colored pill. */}
+      {frameOnly && (
+        <div
+          className="absolute flex items-center gap-2"
+          style={{ top: -32, left: 2 }}
+        >
+          <FolderOpen className="w-4 h-4" style={{ color: "#94A3B8" }} strokeWidth={2} />
+          <span
+            className="text-[14px] font-semibold"
+            style={{ color: "#CBD5E1", fontFamily: "PingFang SC, Inter, system-ui" }}
+          >
+            {data.name ?? "资产组"}
+          </span>
+          <span
+            className="text-[12px] font-medium"
+            style={{ color: "#64748B", fontFamily: "Inter, system-ui" }}
+          >
+            {members.length}
+          </span>
+        </div>
+      )}
+
+      {/* Regular (non-frame) group: colored pill badge */}
+      {!frameOnly && !isVideoGroup && !isImageGroup && (
         <div
           className="absolute flex items-center gap-1.5 rounded-full"
           style={{

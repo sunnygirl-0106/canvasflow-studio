@@ -1,4 +1,4 @@
-import { Trash2, MoreHorizontal } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import {
   useCanvas,
   type ScriptData,
@@ -7,6 +7,12 @@ import {
 } from "@/store/canvasStore";
 import {
   SCRIPT_COLUMNS,
+  COLUMN_WIDTH,
+  INDEX_COL_WIDTH,
+  DELETE_COL_WIDTH,
+  CHAR_NAME_WIDTH,
+  CHAR_DESC_WIDTH,
+  IMAGE_COL_WIDTH,
   characterGroupCount,
   visibleColumns,
   filterShots,
@@ -17,10 +23,21 @@ interface Props {
   nodeId: string;
   script: ScriptData;
   visibleColumnOverride?: ScriptColumnKey[];
-  showActionsColumn?: boolean;
   onAddShot?: () => void;
   renderDialogueCell?: (shot: ScriptShot) => React.ReactNode;
 }
+
+/** Column key → placeholder hint shown inside the cell editor popover. */
+const CELL_PLACEHOLDER: Record<string, string> = {
+  duration: "输入镜头时长（秒），如 3",
+  description: "描述镜头画面内容，可用 @ 引用角色或场景，例如：@少女 撑着 @透明雨伞 走来",
+  shotType: "输入景别，如 全景 / 中景 / 近景 / 特写",
+  lighting: "描述光影氛围，如 自然光、水面反光 / 金色黄昏光 / 丁达尔效应",
+  sound: "描述音效，如 雨滴滴落声，远处蝉鸣",
+  cameraMove: "描述运镜方式，如 推 / 拉 / 摇 / 移 / 跟镜 / 固定",
+  imagePrompt: "输入用于生成图像的提示词",
+  videoPrompt: "输入用于生成视频的提示词",
+};
 
 /** Column key → accessor on ScriptShot */
 const TEXT_FIELDS: Record<string, keyof ScriptShot> = {
@@ -43,7 +60,6 @@ export function ScriptTableView({
   nodeId,
   script,
   visibleColumnOverride,
-  showActionsColumn,
   renderDialogueCell,
 }: Props) {
   const updateScriptShot = useCanvas((s) => s.updateScriptShot);
@@ -56,22 +72,45 @@ export function ScriptTableView({
   const filtered = filterShots(script.shots, script.filter);
   const charCount = characterGroupCount(script.shots);
 
+  // Build the proportional column-width list once so <colgroup> (which drives
+  // the fixed layout) and the natural min-width stay in sync. Character groups
+  // expand to three sub-columns each; refImage is a single thumbnail column.
+  const colWidths: number[] = [INDEX_COL_WIDTH];
+  for (const key of visible) {
+    if (key === "characters") {
+      for (let gi = 0; gi < Math.max(1, charCount); gi++) {
+        colWidths.push(CHAR_NAME_WIDTH, CHAR_DESC_WIDTH, IMAGE_COL_WIDTH);
+      }
+    } else if (key === "refImage") {
+      colWidths.push(IMAGE_COL_WIDTH);
+    } else {
+      colWidths.push(COLUMN_WIDTH[key] ?? 150);
+    }
+  }
+  colWidths.push(DELETE_COL_WIDTH);
+  const minTableWidth = colWidths.reduce((a, b) => a + b, 0);
+
   return (
-    <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E5E7EB" }}>
+    <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #2A2D33", background: "#1F2125" }}>
       <div className="overflow-x-auto">
         <table
           className="w-full text-[12px]"
-          style={{ borderCollapse: "collapse", tableLayout: "auto" }}
+          style={{ borderCollapse: "collapse", tableLayout: "fixed", minWidth: minTableWidth }}
         >
+          <colgroup>
+            {colWidths.map((w, i) => (
+              <col key={i} style={{ width: w }} />
+            ))}
+          </colgroup>
           <thead>
-            <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+            <tr style={{ background: "#15171A", borderBottom: "1px solid #2A2D33" }}>
               {/* Index — always visible */}
               <th
                 className="text-left font-medium whitespace-nowrap align-bottom"
                 style={{
                   padding: "10px 12px",
                   color: "#6B7280",
-                  background: "#F9FAFB",
+                  background: "#15171A",
                   width: 44,
                 }}
               >
@@ -88,7 +127,7 @@ export function ScriptTableView({
                         style={{
                           padding: "10px 12px",
                           color: "#6B7280",
-                          borderLeft: gi > 0 ? "1px solid #E5E7EB" : undefined,
+                          borderLeft: gi > 0 ? "1px solid #2A2D33" : undefined,
                         }}
                       >
                         角色{gi + 1}
@@ -133,28 +172,20 @@ export function ScriptTableView({
                   </th>
                 );
               })}
-              {showActionsColumn && (
-                <th
-                  className="text-left font-medium whitespace-nowrap align-bottom"
-                  style={{ padding: "10px 12px", color: "#6B7280", width: 56 }}
-                >
-                  操作
-                </th>
-              )}
               {/* Delete column */}
               <th style={{ width: 32 }} />
             </tr>
           </thead>
           <tbody>
             {filtered.map((shot) => (
-              <tr key={shot.id} className="group/row" style={{ borderTop: "1px solid #F3F4F6" }}>
+              <tr key={shot.id} className="group/row" style={{ borderTop: "1px solid #2A2D33" }}>
                 {/* Index */}
                 <td
                   className="font-mono text-[12px] align-top"
                   style={{
                     padding: "10px 12px",
                     color: "#9CA3AF",
-                    background: "#FFFFFF",
+                    background: "transparent",
                   }}
                 >
                   {shot.index}
@@ -168,16 +199,18 @@ export function ScriptTableView({
                         <WrapCell
                           key={`${shot.id}-char-${gi}-name`}
                           value={char?.name ?? ""}
+                          placeholder={`输入角色${gi + 1}的名字，如 少女`}
                           onChange={(v) =>
                             char
                               ? updateScriptCharacter(nodeId, shot.id, char.id, { name: v })
                               : undefined
                           }
-                          style={{ borderLeft: gi > 0 ? "1px solid #F3F4F6" : undefined }}
+                          style={{ borderLeft: gi > 0 ? "1px solid #2A2D33" : undefined }}
                         />,
                         <WrapCell
                           key={`${shot.id}-char-${gi}-desc`}
                           value={char?.desc ?? ""}
+                          placeholder="描述角色的外形、服饰与气质，如 白裙、扎马尾的少女"
                           onChange={(v) =>
                             char
                               ? updateScriptCharacter(nodeId, shot.id, char.id, { desc: v })
@@ -226,6 +259,7 @@ export function ScriptTableView({
                       <DescriptionCell
                         key={`${shot.id}-description`}
                         value={shot.description}
+                        placeholder={CELL_PLACEHOLDER.description}
                         onChange={(v) => updateScriptShot(nodeId, shot.id, { description: v })}
                       />
                     );
@@ -254,6 +288,7 @@ export function ScriptTableView({
                     <WrapCell
                       key={`${shot.id}-${key}`}
                       value={String(shot[field] ?? "")}
+                      placeholder={CELL_PLACEHOLDER[key]}
                       onChange={(v) => {
                         if (field === "duration") {
                           const num = parseFloat(v);
@@ -268,20 +303,10 @@ export function ScriptTableView({
                     />
                   );
                 })}
-                {showActionsColumn && (
-                  <td className="align-top" style={{ padding: "8px 4px" }}>
-                    <button
-                      className="flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
-                      style={{ width: 28, height: 28 }}
-                    >
-                      <MoreHorizontal className="w-4 h-4" style={{ color: "#9CA3AF" }} />
-                    </button>
-                  </td>
-                )}
                 {/* Delete */}
                 <td className="align-top" style={{ padding: "8px 4px" }}>
                   <button
-                    className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center rounded hover:bg-red-50 transition-opacity"
+                    className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center rounded hover:bg-red-500/10 transition-opacity"
                     style={{ width: 24, height: 24 }}
                     onClick={() => {
                       if (confirm(`删除第 ${shot.index} 镜？`)) removeScriptShot(nodeId, shot.id);

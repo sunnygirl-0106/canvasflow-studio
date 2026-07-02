@@ -192,7 +192,7 @@ export interface ScriptData {
 }
 
 export const SCRIPT_MODELS = ["GVLM 3.1"];
-export const SCRIPT_NODE_WIDTH = 700;
+export const SCRIPT_NODE_WIDTH = 480;
 export const SCRIPT_SHOT_TYPES = ["特写", "近景", "中近景", "中景", "全景", "远景"];
 
 // ── Discriminated-union CanvasNode ───────────────────────────────────────────

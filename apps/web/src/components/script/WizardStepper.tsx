@@ -49,8 +49,8 @@ export function WizardStepper({
                   width: 28,
                   height: 28,
                   ...(isDone || isActive
-                    ? { background: "#1F2937", color: "#FFFFFF" }
-                    : { background: "transparent", border: "2px solid #D1D5DB", color: "#D1D5DB" }),
+                    ? { background: "#14B8A6", color: "#0B1220" }
+                    : { background: "transparent", border: "2px solid #3F4248", color: "#6B7280" }),
                 }}
               >
                 {isDone ? <Check className="w-3.5 h-3.5" strokeWidth={3} /> : step}
@@ -59,7 +59,7 @@ export function WizardStepper({
                 <span
                   className="text-[13px] whitespace-nowrap leading-tight"
                   style={{
-                    color: isDone || isActive ? "#1F2937" : "#9CA3AF",
+                    color: isDone || isActive ? "#E5E7EB" : "#9CA3AF",
                     fontFamily: "PingFang SC, Inter, system-ui",
                     fontWeight: isActive ? 600 : 400,
                   }}
@@ -69,7 +69,7 @@ export function WizardStepper({
                 <span
                   className="text-[11px] whitespace-nowrap leading-tight"
                   style={{
-                    color: isDone || isActive ? "#6B7280" : "#D1D5DB",
+                    color: isDone || isActive ? "#6B7280" : "#6B7280",
                     fontFamily: "PingFang SC, Inter, system-ui",
                   }}
                 >
@@ -85,7 +85,7 @@ export function WizardStepper({
                   width: 40,
                   height: 2,
                   marginLeft: 12,
-                  background: step < currentStep ? "#1F2937" : "#E5E5E5",
+                  background: step < currentStep ? "#14B8A6" : "#2A2D33",
                 }}
               />
             )}

@@ -47,15 +47,15 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.4)" }}
+      style={{ background: "rgba(0,0,0,0.6)" }}
     >
       <div
         className="rounded-2xl flex flex-col"
         style={{
           width: 640,
           maxHeight: "70vh",
-          background: "#FFFFFF",
-          boxShadow: "0 24px 64px rgba(15,23,42,0.22)",
+          background: "#1F2125",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
           fontFamily: "PingFang SC, Inter, system-ui",
         }}
       >
@@ -64,11 +64,11 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
           className="flex items-center justify-between flex-shrink-0"
           style={{ padding: "20px 24px 0" }}
         >
-          <span className="text-[16px] font-semibold" style={{ color: "#0F172A" }}>
+          <span className="text-[16px] font-semibold" style={{ color: "#E5E7EB" }}>
             选择图片
           </span>
           <button
-            className="flex items-center justify-center rounded-lg hover:bg-slate-100"
+            className="flex items-center justify-center rounded-lg hover:bg-white/5"
             style={{ width: 30, height: 30 }}
             onClick={onClose}
           >
@@ -84,8 +84,8 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
               className="text-[13px] font-medium rounded-lg transition-colors"
               style={{
                 padding: "6px 16px",
-                background: tab === t.key ? "#F1F5F9" : "transparent",
-                color: tab === t.key ? "#0F172A" : "#94A3B8",
+                background: tab === t.key ? "#2A2D33" : "transparent",
+                color: tab === t.key ? "#E5E7EB" : "#94A3B8",
               }}
               onClick={() => setTab(t.key)}
             >
@@ -101,8 +101,8 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
               className="flex items-center justify-center rounded-xl"
               style={{
                 height: 200,
-                background: "#F8FAFC",
-                border: "1px dashed #E2E8F0",
+                background: "#15171A",
+                border: "1px dashed #3F4248",
                 color: "#94A3B8",
               }}
             >
@@ -117,8 +117,8 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
                   className="flex items-center justify-center rounded-xl"
                   style={{
                     height: 200,
-                    background: "#F8FAFC",
-                    border: "1px dashed #E2E8F0",
+                    background: "#15171A",
+                    border: "1px dashed #3F4248",
                     color: "#94A3B8",
                   }}
                 >
@@ -132,7 +132,7 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
                       className="rounded-lg overflow-hidden transition-all hover:ring-2 hover:ring-blue-400"
                       style={{
                         aspectRatio: "1",
-                        border: "1px solid #E5E7EB",
+                        border: "1px solid #2A2D33",
                       }}
                       onClick={() => selectImage(img.src)}
                     >
@@ -159,11 +159,11 @@ export function ImagePickerModal({ nodeId, assetId, onClose }: Props) {
                 onChange={handleFile}
               />
               <button
-                className="rounded-xl transition-colors hover:bg-slate-50"
+                className="rounded-xl transition-colors hover:bg-white/5"
                 style={{
                   width: "100%",
                   height: 200,
-                  border: "2px dashed #D1D5DB",
+                  border: "2px dashed #3F4248",
                   color: "#6B7280",
                 }}
                 onClick={() => fileRef.current?.click()}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DemoImg } from "@/components/DemoImg";
-import { ArrowRight, Plus, User, Mountain, Box, Info, Loader2 } from "lucide-react";
+import { ArrowRight, Plus, AlertTriangle, Loader2 } from "lucide-react";
 import { useCanvas } from "@/store/canvasStore";
 import type { ScriptData, ScriptAsset } from "@/store/types";
 import { AssetEditSidebar } from "./AssetEditSidebar";
@@ -12,14 +12,19 @@ interface Props {
   onNext: () => void;
 }
 
+/** Asset card box size — matches the large placeholder cards in the design. */
+const CARD_WIDTH = 316;
+const CARD_HEIGHT = 180;
+
 const SECTION_META: {
   type: ScriptAsset["type"];
   label: string;
-  icon: typeof User;
+  /** Wording used in the bottom warning banner (角色 → 人物角色). */
+  warnLabel: string;
 }[] = [
-  { type: "character", label: "角色", icon: User },
-  { type: "scene", label: "场景", icon: Mountain },
-  { type: "prop", label: "道具", icon: Box },
+  { type: "character", label: "角色", warnLabel: "人物角色" },
+  { type: "scene", label: "场景", warnLabel: "场景" },
+  { type: "prop", label: "道具", warnLabel: "道具" },
 ];
 
 export function PrepareAssetsStep({ nodeId, script, onNext }: Props) {
@@ -41,6 +46,15 @@ export function PrepareAssetsStep({ nodeId, script, onNext }: Props) {
   const missingCount = assets.filter((a) => !a.image).length;
   const allDone = assets.length > 0 && missingCount === 0;
 
+  // Per-type breakdown of assets still missing a set image, for the warning copy.
+  const warningText = (() => {
+    const parts = SECTION_META.map(({ type, warnLabel }) => {
+      const n = assets.filter((a) => a.type === type && !a.image).length;
+      return n > 0 ? `${n} 个${warnLabel}` : null;
+    }).filter(Boolean);
+    return `检测到有${parts.join("和")}没有设定图，您可以手动上传或AI批量生成`;
+  })();
+
   const handleAddNew = (type: ScriptAsset["type"]) => {
     const newAsset: ScriptAsset = {
       id: `asset-new-${Date.now()}`,
@@ -58,50 +72,48 @@ export function PrepareAssetsStep({ nodeId, script, onNext }: Props) {
         {/* Main content */}
         <div className="flex-1 min-w-0 overflow-auto" style={{ padding: "0 0 16px" }}>
           {/* Global style */}
-          <div className="mb-6">
+          <div className="mb-6 flex items-center gap-3 flex-wrap">
             <span
-              className="inline-flex items-center gap-1.5 rounded-lg text-[13px] font-medium"
+              className="inline-flex items-center rounded-md text-[13px] font-medium flex-shrink-0"
               style={{
-                padding: "8px 14px",
-                background: "#F3F4F6",
-                color: "#374151",
-                border: "1px solid #E5E7EB",
+                padding: "4px 10px",
+                background: "#16302F",
+                color: "#56C7CF",
               }}
             >
-              全局风格: {script.globalStyle ?? "中国古风 \u00B7 电影质感"}
+              全局风格
+            </span>
+            <span
+              className="text-[13px]"
+              style={{ color: "#D1D5DB", fontFamily: "PingFang SC, Inter, system-ui" }}
+            >
+              {script.globalStyle ??
+                "中国古风 · 电影质感。冷暖对比布光，浅景深与胶片颗粒，服化道考究，整体沉稳克制。"}
             </span>
           </div>
 
           {/* Asset sections */}
-          {SECTION_META.map(({ type, label, icon: Icon }) => {
+          {SECTION_META.map(({ type, label }) => {
             const items = assets.filter((a) => a.type === type);
             return (
-              <div key={type} className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Icon className="w-4 h-4" style={{ color: "#6B7280" }} />
-                  <span
-                    className="text-[14px] font-semibold"
-                    style={{
-                      color: "#1F2937",
-                      fontFamily: "PingFang SC, Inter, system-ui",
-                    }}
-                  >
-                    {label}
-                  </span>
-                  <span className="text-[12px]" style={{ color: "#9CA3AF" }}>
-                    ({items.length})
-                  </span>
+              <div key={type} className="mb-8">
+                <div
+                  className="mb-3 text-[15px] font-semibold"
+                  style={{ color: "#E5E7EB", fontFamily: "PingFang SC, Inter, system-ui" }}
+                >
+                  {label}
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap items-start gap-4">
                   {items.map((asset) => (
                     <AssetCard
                       key={asset.id}
                       asset={asset}
+                      typeLabel={label}
                       selected={editingAssetId === asset.id}
                       onClick={() => setEditingAssetId(asset.id)}
                     />
                   ))}
-                  <AddNewCard label={label} onClick={() => handleAddNew(type)} />
+                  <AddNewCard onClick={() => handleAddNew(type)} />
                 </div>
               </div>
             );
@@ -118,53 +130,38 @@ export function PrepareAssetsStep({ nodeId, script, onNext }: Props) {
         )}
       </div>
 
-      {/* Bottom bar */}
+      {/* Bottom bar — full-bleed separator, warning left, primary action right. */}
       <div
         className="flex items-center justify-between flex-shrink-0"
-        style={{ padding: "16px 0 0" }}
+        style={{ margin: "0 -24px", padding: "16px 24px 0", borderTop: "1px solid #2A2D33" }}
       >
         {!allDone ? (
-          <div
-            className="flex items-center gap-2 text-[12px] rounded-lg"
-            style={{
-              padding: "8px 14px",
-              background: "#FEF9C3",
-              color: "#92400E",
-              border: "1px solid #FDE68A",
-            }}
-          >
-            <Info className="w-3.5 h-3.5 flex-shrink-0" />
-            检测到 {missingCount} 个资产没有设定图片
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: "#FCD34D" }}>
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            {warningText}
           </div>
         ) : (
           <div />
         )}
 
-        <div className="flex items-center gap-3">
-          {!allDone && (
-            <button
-              className="flex items-center gap-1.5 text-[13px] font-semibold rounded-lg text-white transition-colors hover:opacity-90"
-              style={{
-                padding: "8px 20px",
-                background: "#7C3AED",
-              }}
-              onClick={() => setGenerateDialogOpen(true)}
-            >
-              一键生成所有资产
-            </button>
-          )}
+        {allDone ? (
           <button
-            className="flex items-center gap-1.5 text-[13px] font-semibold rounded-lg text-white transition-colors hover:opacity-90"
-            style={{
-              padding: "8px 20px",
-              background: "#1F2937",
-            }}
+            className="flex items-center gap-1.5 text-[13px] font-semibold rounded-lg transition-colors hover:opacity-90"
+            style={{ padding: "9px 20px", background: "#14B8A6", color: "#0B1220" }}
             onClick={onNext}
           >
             下一步: 合成提示词
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
-        </div>
+        ) : (
+          <button
+            className="flex items-center gap-1.5 text-[13px] font-semibold rounded-lg transition-opacity hover:opacity-90"
+            style={{ padding: "9px 22px", background: "#F1F5F9", color: "#0B1220" }}
+            onClick={() => setGenerateDialogOpen(true)}
+          >
+            一键生成所有资产
+          </button>
+        )}
       </div>
 
       <GenerateAllAssetsDialog
@@ -181,10 +178,12 @@ export function PrepareAssetsStep({ nodeId, script, onNext }: Props) {
 
 function AssetCard({
   asset,
+  typeLabel,
   selected,
   onClick,
 }: {
   asset: ScriptAsset;
+  typeLabel: string;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -195,26 +194,21 @@ function AssetCard({
       : 0;
 
   return (
-    <button
-      className="flex flex-col items-center rounded-xl transition-all text-left"
-      style={{
-        width: 225,
-        height: 165,
-        background: "#FAFAFA",
-        border: selected ? "2px solid #3B82F6" : "1px solid #E5E7EB",
-        padding: 12,
-        cursor: "pointer",
-      }}
-      onClick={onClick}
-    >
-      {/* Image / placeholder / progress */}
-      <div
-        className="rounded-lg mb-2 overflow-hidden flex items-center justify-center relative"
+    <div style={{ width: CARD_WIDTH }}>
+      {/* Image / placeholder box */}
+      <button
+        className="block w-full rounded-xl overflow-hidden transition-all relative text-center"
         style={{
-          width: "100%",
-          height: 90,
-          background: "#E5E7EB",
+          height: CARD_HEIGHT,
+          background: "#15171A",
+          border: selected
+            ? "2px solid #14B8A6"
+            : asset.image
+              ? "1px solid #2A2D33"
+              : "1px dashed #3F4248",
+          cursor: "pointer",
         }}
+        onClick={onClick}
       >
         {asset.image ? (
           <DemoImg
@@ -224,66 +218,59 @@ function AssetCard({
             draggable={false}
           />
         ) : isGenerating ? (
-          <div className="flex flex-col items-center gap-1">
-            <Loader2 className="w-5 h-5 animate-spin" style={{ color: "#7C3AED" }} />
-            <span className="text-[11px]" style={{ color: "#7C3AED" }}>
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#14B8A6" }} />
+            <span className="text-[12px]" style={{ color: "#14B8A6" }}>
               {progress}%
             </span>
           </div>
         ) : (
-          <span className="text-[24px]" style={{ color: "#D1D5DB" }}>
-            ?
-          </span>
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-[13px]" style={{ color: "#6B7280" }}>
+              生成或上传{typeLabel}图
+            </span>
+          </div>
         )}
         {isGenerating && (
           <div
             className="absolute bottom-0 left-0 h-1"
-            style={{
-              width: `${progress}%`,
-              background: "#7C3AED",
-              transition: "width 0.3s ease",
-            }}
+            style={{ width: `${progress}%`, background: "#14B8A6", transition: "width 0.3s ease" }}
           />
         )}
-      </div>
+      </button>
 
       {/* Name */}
-      <span
-        className="text-[13px] font-medium truncate w-full text-center"
-        style={{ color: "#374151" }}
+      <div
+        className="mt-2 text-[13px] font-semibold truncate"
+        style={{ color: "#E5E7EB", fontFamily: "PingFang SC, Inter, system-ui" }}
       >
         {asset.name || "未命名"}
-      </span>
-      {/* Description truncated */}
+      </div>
+      {/* Description — single truncated line */}
       {asset.description && (
-        <span
-          className="text-[11px] truncate w-full text-center mt-0.5"
-          style={{ color: "#9CA3AF" }}
-        >
+        <div className="mt-0.5 text-[12px] truncate" style={{ color: "#9CA3AF" }}>
           {asset.description}
-        </span>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
 /* ── Add New Card ─────────────────────────────────────────────────── */
 
-function AddNewCard({ label, onClick }: { label: string; onClick: () => void }) {
+function AddNewCard({ onClick }: { onClick: () => void }) {
   return (
-    <button
-      className="flex flex-col items-center justify-center rounded-xl transition-colors hover:bg-gray-50 cursor-pointer"
-      style={{
-        width: 225,
-        height: 165,
-        border: "1px dashed #D1D5DB",
-      }}
-      onClick={onClick}
-    >
-      <Plus className="w-6 h-6 mb-1" style={{ color: "#9CA3AF" }} />
-      <span className="text-[12px]" style={{ color: "#9CA3AF" }}>
-        新增{label}
-      </span>
-    </button>
+    <div style={{ width: CARD_WIDTH }}>
+      <button
+        className="w-full flex flex-col items-center justify-center rounded-xl transition-colors hover:bg-white/5"
+        style={{ height: CARD_HEIGHT, border: "1px dashed #3F4248", cursor: "pointer" }}
+        onClick={onClick}
+      >
+        <Plus className="w-6 h-6 mb-1" style={{ color: "#6B7280" }} />
+        <span className="text-[12px]" style={{ color: "#6B7280" }}>
+          新增
+        </span>
+      </button>
+    </div>
   );
 }

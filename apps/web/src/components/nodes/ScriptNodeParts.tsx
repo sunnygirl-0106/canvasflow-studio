@@ -1,4 +1,12 @@
-import { RefreshCw, AlertCircle, ImageIcon, AlignLeft, Check, ArrowRight } from "lucide-react";
+import {
+  RefreshCw,
+  AlertCircle,
+  ImageIcon,
+  AlignLeft,
+  ArrowLeft,
+  Check,
+  ArrowRight,
+} from "lucide-react";
 import { DemoImg } from "@/components/DemoImg";
 import type { ScriptShot, ScriptAsset, WizardStep } from "@canvasflow/shared";
 
@@ -34,17 +42,40 @@ export function ToolbarBtn({
 
 /* ── EmptyBody ───────────────────────────────────────────── */
 
-export function EmptyBody() {
+export function EmptyBody({ connected }: { connected?: boolean }) {
+  // Once a text node is wired to the left, drop the "connect a text node" hint
+  // and show a content icon that signals the source is ready.
+  if (connected) {
+    return (
+      <div
+        className="flex flex-1 items-center justify-center rounded-xl"
+        style={{ background: "#15171A", border: "1px solid #2A2D33" }}
+      >
+        <div
+          className="flex items-center justify-center rounded-xl"
+          style={{ width: 76, height: 76, background: "#1F2125", border: "1px solid #2A2D33" }}
+        >
+          <AlignLeft className="w-9 h-9" style={{ color: "#56C7CF" }} strokeWidth={1.4} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="flex flex-col items-center justify-center rounded-xl"
+      className="flex flex-col flex-1 items-center justify-center rounded-xl gap-3"
       style={{
-        height: 200,
         background: "#15171A",
         border: "1px dashed #3F4248",
       }}
     >
-      <AlignLeft className="w-10 h-10" style={{ color: "#4B5563" }} strokeWidth={1.6} />
+      <ArrowLeft className="w-9 h-9" style={{ color: "#4B5563" }} strokeWidth={1.6} />
+      <span
+        className="text-[13px]"
+        style={{ color: "#6B7280", fontFamily: "PingFang SC, Inter, system-ui" }}
+      >
+        从左侧连接文本、图片节点
+      </span>
     </div>
   );
 }
@@ -52,11 +83,11 @@ export function EmptyBody() {
 /* ── GeneratingBody ──────────────────────────────────────── */
 
 export function GeneratingBody({ progress, onCancel }: { progress: number; onCancel: () => void }) {
-  const ROWS = 7;
+  const ROWS = 5;
   const COLS = 3;
   return (
     <div
-      className="flex flex-col rounded-xl"
+      className="flex flex-col flex-1 justify-center rounded-xl"
       style={{
         background: "#15171A",
         border: "1px solid #2A2D33",
@@ -81,7 +112,7 @@ export function GeneratingBody({ progress, onCancel }: { progress: number; onCan
         ))}
       </div>
 
-      <div style={{ height: 40 }} />
+      <div style={{ height: 24 }} />
 
       {/* Progress pill */}
       <div className="flex justify-center">
@@ -136,20 +167,20 @@ export function ReadyBody({
 
   return (
     <div
-      className="flex flex-col items-center rounded-xl"
+      className="flex flex-col flex-1 items-center justify-center rounded-xl"
       style={{
         background: "#15171A",
         border: "1px solid #2A2D33",
-        padding: "24px 20px",
+        padding: "16px 16px",
       }}
     >
-      <AlignLeft className="w-10 h-10 mb-6" style={{ color: "#4B5563" }} strokeWidth={1.6} />
+      <AlignLeft className="w-8 h-8 mb-4" style={{ color: "#4B5563" }} strokeWidth={1.6} />
 
       {/* Stepper */}
-      <div className="flex items-center gap-0 mb-8">
+      <div className="flex items-center gap-0 mb-5">
         {steps.map((step, i) => (
           <div key={i} className="flex items-center">
-            <div className="flex flex-col items-center" style={{ minWidth: 80 }}>
+            <div className="flex flex-col items-center" style={{ minWidth: 72 }}>
               <div
                 className="flex items-center justify-center rounded-full text-[13px] font-bold"
                 style={{
@@ -183,7 +214,7 @@ export function ReadyBody({
             {i < steps.length - 1 && (
               <div
                 style={{
-                  width: 48,
+                  width: 32,
                   height: 2,
                   marginTop: -18,
                   background: steps[i + 1].done || steps[i + 1].active ? "#14B8A6" : "#2A2D33",
@@ -275,8 +306,8 @@ export function ShotThumbnailStrip({
 export function FailedBody({ error, onRetry }: { error?: string; onRetry: () => void }) {
   return (
     <div
-      className="flex flex-col items-center justify-center rounded-xl"
-      style={{ height: 120, background: "#2A1416", border: "1px solid #5B2526" }}
+      className="flex flex-col flex-1 items-center justify-center rounded-xl"
+      style={{ background: "#2A1416", border: "1px solid #5B2526" }}
     >
       <AlertCircle className="w-6 h-6 mb-2" style={{ color: "#F87171" }} />
       <span className="text-[12px] mb-2" style={{ color: "#FCA5A5" }}>

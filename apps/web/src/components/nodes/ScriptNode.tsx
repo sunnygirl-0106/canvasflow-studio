@@ -1,41 +1,42 @@
 import { Handle, Position, NodeToolbar } from "@xyflow/react";
 import { memo, useMemo, useState } from "react";
-import {
-  FileText,
-  RefreshCw,
-  ImageIcon,
-  Download,
-  ChevronDown,
-  ArrowUp,
-  Zap,
-  ListOrdered,
-  Video,
-} from "lucide-react";
+import { FileText, RefreshCw, ImageIcon, AlignLeft, Download, Zap, Video } from "lucide-react";
 import {
   useCanvas,
   type CanvasNode,
   type ScriptNodeData,
   type ScriptData,
-  SCRIPT_MODELS,
   SCRIPT_NODE_WIDTH,
 } from "@/store/canvasStore";
 import { getUpstreamMounts } from "@/store/selectors/upstream";
+import { useIsMultiSelected } from "@/lib/useIsMultiSelected";
+import { PromptPanel } from "@/components/PromptPanel";
+import { DemoImg } from "@/components/DemoImg";
 import { GenerateStoryboardDialog } from "@/components/script/GenerateStoryboardDialog";
 import { BatchVideoDialog } from "@/components/script/BatchVideoDialog";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
-import {
-  ToolbarBtn,
-  EmptyBody,
-  GeneratingBody,
-  ReadyBody,
-  FailedBody,
-  ShotThumbnailStrip,
-} from "./ScriptNodeParts";
+import { ToolbarBtn, EmptyBody, GeneratingBody, ReadyBody, FailedBody } from "./ScriptNodeParts";
+
+/** Prompt panel sits wider than the node card so the composer feels primary. */
+const SCRIPT_PROMPT_WIDTH = 640;
 
 export const ScriptNode = memo(ScriptNodeImpl);
 
-function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
+function ScriptNodeImpl({
+  id,
+  data,
+  selected,
+}: {
+  id: string;
+  data: ScriptNodeData;
+  selected?: boolean;
+}) {
   const script = data.script as ScriptData | undefined;
+  // Show the prompt composer only when this node alone is selected — mirrors
+  // GenerateImageNode: click the node and the composer floats below it, rather
+  // than living inside the node body permanently.
+  const multiSelected = useIsMultiSelected();
+  const soloSelected = !!selected && !multiSelected;
   const openScript = useCanvas((s) => s.openScript);
   const generateScript = useCanvas((s) => s.generateScript);
   const cancelScript = useCanvas((s) => s.cancelScript);
@@ -60,13 +61,18 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
   const allPromptsDone =
     script.shots.length > 0 && script.shots.every((s) => s.finalPromptStatus === "done");
 
-  const connectedTextMounts = upstreamMounts.filter((m) => m.kind === "text" && !!m.text?.trim());
-  const connectedAssetGroupMounts = upstreamMounts.filter((m) => m.kind === "nodeGroup");
-  const connectedTextCount = connectedTextMounts.length;
-  const totalMountCount = connectedTextCount + connectedAssetGroupMounts.length;
-
+  const connectedTextCount = upstreamMounts.filter(
+    (m) => m.kind === "text" && !!m.text?.trim(),
+  ).length;
   const hasTextInput = connectedTextCount > 0;
+  const hasImageInput = upstreamMounts.some((m) => m.kind === "image");
   const hasSource = hasTextInput || !!script.sourceText?.trim();
+
+  // Header icon reflects what's wired to the left input: an image icon when an
+  // image node is connected, a text-lines icon when only text is connected, and
+  // the default document icon when nothing is connected yet.
+  const HeaderIcon = hasImageInput ? ImageIcon : hasTextInput ? AlignLeft : FileText;
+  const headerIconColor = hasImageInput || hasTextInput ? "#56C7CF" : "#9CA3AF";
   const canGenerate = hasSource && script.status !== "generating";
   const isGenerating = script.status === "generating";
   const isReady = script.status === "ready";
@@ -136,9 +142,10 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
 
   return (
     <div
-      className="fade-in group relative rounded-2xl overflow-visible"
+      className="fade-in group relative rounded-2xl overflow-visible flex flex-col"
       style={{
         width: SCRIPT_NODE_WIDTH,
+        height: SCRIPT_NODE_WIDTH,
         background: "#1F2125",
         border: "1px solid #2A2D33",
         boxShadow: "0 18px 36px rgba(0,0,0,0.45)",
@@ -154,9 +161,9 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
 
       {/* Header */}
       <div className="flex items-center gap-2" style={{ padding: "14px 20px 10px" }}>
-        <FileText
+        <HeaderIcon
           className="w-[18px] h-[18px] flex-shrink-0"
-          style={{ color: "#9CA3AF" }}
+          style={{ color: headerIconColor }}
           strokeWidth={1.8}
         />
         <span
@@ -167,9 +174,10 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
         </span>
       </div>
 
-      {/* Body — depends on status */}
-      <div style={{ padding: "0 20px 0" }}>
-        {script.status === "empty" && <EmptyBody />}
+      {/* Body — depends on status. Fills the remaining height so the card stays
+          square; each status body stretches to fill via flex-1. */}
+      <div className="flex flex-col flex-1 min-h-0" style={{ padding: "0 20px 16px" }}>
+        {script.status === "empty" && <EmptyBody connected={hasSource} />}
         {script.status === "generating" && (
           <GeneratingBody progress={script.progress ?? 0} onCancel={() => cancelScript(id)} />
         )}
@@ -185,146 +193,93 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
         )}
       </div>
 
-      {/* Prompt card — hidden during generation */}
-      {!isGenerating && (
-        <div style={{ padding: "12px 20px 16px" }}>
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{
-              background: "#15171A",
-              border: "1px solid #2A2D33",
-            }}
-          >
-            {/* Top row: script badge + shot thumbnails (thumbnails only after wizard complete) */}
-            <div className="flex items-center gap-2" style={{ padding: "10px 14px 0" }}>
-              {/* Connected upstream badge — counts text inputs + materialized
-                  asset groups. Hover reveals the source names. */}
-              {totalMountCount > 0 && (
-                <div
-                  className="inline-flex items-center justify-center rounded-lg relative flex-shrink-0"
-                  style={{ width: 36, height: 36, background: "#2A2D33" }}
-                  title={[
-                    ...connectedTextMounts.map((m) => `剧本：${m.name}`),
-                    ...connectedAssetGroupMounts.map((m) => `资产组：${m.name}`),
-                  ].join("\n")}
-                >
-                  <ListOrdered className="w-4 h-4" style={{ color: "#9CA3AF" }} strokeWidth={1.8} />
-                  <span
-                    className="absolute -top-1 -right-1 flex items-center justify-center rounded-full text-white text-[10px] font-bold"
-                    style={{ width: 16, height: 16, background: "#6366F1" }}
-                  >
-                    {totalMountCount}
-                  </span>
-                </div>
-              )}
-
-              {/* Shot thumbnail strip — only after all prompts done */}
-              {allPromptsDone && script.shots.length > 0 && (
-                <ShotThumbnailStrip shots={script.shots} assets={script.assets} />
-              )}
-            </div>
-
-            {/* Textarea */}
-            <div style={{ padding: "10px 14px" }}>
-              <textarea
-                className="nodrag nowheel w-full text-[14px] outline-none resize-none"
-                style={{
-                  minHeight: 48,
-                  color: "#E5E7EB",
-                  fontFamily: "PingFang SC, Inter, system-ui",
-                  background: "transparent",
-                }}
-                placeholder="根据我上传的剧本生成一个完整的故事脚本"
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                onMouseDown={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && canGenerate) {
-                    e.preventDefault();
-                    handleGenerate();
-                  }
-                }}
-                rows={2}
-              />
-            </div>
-
-            {/* Bottom toolbar */}
-            <div
-              className="flex items-center justify-between"
-              style={{ padding: "8px 14px", borderTop: "1px solid #2A2D33" }}
-            >
-              {/* Left: model selector with icon */}
-              <div className="flex items-center gap-1.5">
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  style={{ color: "#56C7CF", flexShrink: 0 }}
-                >
-                  <path
-                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
-                    fill="currentColor"
-                  />
-                </svg>
-                <select
-                  className="appearance-none text-[13px] font-medium outline-none cursor-pointer bg-transparent"
-                  style={{
-                    color: "#E5E7EB",
-                    fontFamily: "PingFang SC, Inter, system-ui",
-                    paddingRight: 16,
-                  }}
-                  value={script.model}
-                  onChange={(e) =>
-                    updateNode(
-                      id,
-                      (n) =>
-                        ({
-                          ...n,
-                          data: {
-                            ...n.data,
-                            script: { ...(n.data as ScriptNodeData).script, model: e.target.value },
-                          },
-                        }) as CanvasNode,
-                    )
-                  }
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  {SCRIPT_MODELS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
+      {/* Prompt composer — floats below the node when this node is the sole
+          selection. Reuses the exact image-node prompt panel (PromptPanel), so
+          style + interactions stay identical. Rendered inline (not NodeToolbar)
+          so it inherits the viewport zoom. */}
+      {soloSelected && !isGenerating && (
+        <div
+          className="nodrag nowheel"
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: 12,
+            zIndex: 10,
+          }}
+        >
+          <PromptPanel
+            prompt={promptText}
+            onPromptChange={setPromptText}
+            placeholder="根据我上传的剧本生成一个完整的故事脚本"
+            model={script.model}
+            onSend={handleGenerate}
+            canSend={canGenerate}
+            showParams={false}
+            width={SCRIPT_PROMPT_WIDTH}
+            textareaMinHeight={96}
+            chips={
+              /* Upstream-mount chips — one per live upstream node wired to the
+                 left input. Image mounts show a thumbnail; text mounts (剧本,
+                 which carry no src) show a text-lines tile. Hidden entirely
+                 when nothing is mounted. */
+              upstreamMounts.length > 0 ? (
+                <div className="flex items-center flex-wrap gap-2">
+                  {upstreamMounts.map((m) => (
+                    <span
+                      key={m.nodeId}
+                      className="inline-flex items-center gap-2 rounded-lg"
+                      style={{ padding: "3px 8px 3px 3px", background: "#2A2D33" }}
+                      title={m.kind === "text" ? m.text : undefined}
+                    >
+                      {m.src ? (
+                        <DemoImg
+                          src={m.src}
+                          alt=""
+                          draggable={false}
+                          style={{ width: 22, height: 22, objectFit: "cover", borderRadius: 4 }}
+                        />
+                      ) : (
+                        <span
+                          className="inline-flex items-center justify-center"
+                          style={{ width: 22, height: 22, borderRadius: 4, background: "#1F2125" }}
+                        >
+                          <AlignLeft
+                            className="w-3.5 h-3.5"
+                            style={{ color: "#56C7CF" }}
+                            strokeWidth={1.8}
+                          />
+                        </span>
+                      )}
+                      <span
+                        className="text-[12px] font-bold tracking-wide"
+                        style={{ color: "#E5E7EB" }}
+                      >
+                        {m.name}
+                      </span>
+                    </span>
                   ))}
-                </select>
-                <ChevronDown className="w-3 h-3 -ml-4" style={{ color: "#9CA3AF" }} />
-              </div>
-
-              {/* Right: lightning + count + send button */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 text-[13px]" style={{ color: "#9CA3AF" }}>
-                  <Zap className="w-3.5 h-3.5" strokeWidth={2} />
-                  <span>{script.shots.length || 6}</span>
                 </div>
-                <button
-                  className="flex items-center justify-center transition-opacity"
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    background: canGenerate ? "#FFFFFF" : "#2A2D33",
-                    color: canGenerate ? "#15171A" : "#6B7280",
-                  }}
-                  disabled={!canGenerate}
-                  onClick={handleGenerate}
-                  title={hasSource ? "生成" : "请先连入剧本或粘贴剧本文本"}
-                >
-                  <ArrowUp className="w-4 h-4" />
-                </button>
+              ) : null
+            }
+            cost={
+              <div
+                className="text-[12px] flex items-center gap-1.5"
+                style={{ color: "#9CA3AF", fontFamily: "PingFang SC, Inter, system-ui" }}
+              >
+                <Zap className="w-3.5 h-3.5" style={{ color: "#9CA3AF" }} strokeWidth={1.8} />
+                <span>预计消耗</span>
+                <span className="text-[13px] font-bold" style={{ color: "#E5E7EB" }}>
+                  {script.shots.length || 6}
+                </span>
+                <span style={{ color: "#E5E7EB" }}>星钻</span>
+                <span className="text-[12px] font-semibold" style={{ color: "#22C55E" }}>
+                  已豁免
+                </span>
               </div>
-            </div>
-          </div>
+            }
+          />
         </div>
       )}
 
@@ -336,20 +291,16 @@ function ScriptNodeImpl({ id, data }: { id: string; data: ScriptNodeData }) {
         style={{ background: COLORS.handle }}
       />
 
-      {showStoryboardDialog && (
-        <div className="absolute z-50" style={{ top: 0, left: "calc(100% + 16px)" }}>
-          <GenerateStoryboardDialog
-            open={showStoryboardDialog}
-            scriptTitle={script.title}
-            shots={script.shots}
-            onGenerate={(shotIds) => {
-              setShowStoryboardDialog(false);
-              generateStoryboardFromScript(id, shotIds);
-            }}
-            onCancel={() => setShowStoryboardDialog(false)}
-          />
-        </div>
-      )}
+      <GenerateStoryboardDialog
+        open={showStoryboardDialog}
+        nodeId={id}
+        shots={script.shots}
+        onGenerate={(shotIds) => {
+          setShowStoryboardDialog(false);
+          generateStoryboardFromScript(id, shotIds);
+        }}
+        onCancel={() => setShowStoryboardDialog(false)}
+      />
 
       <BatchVideoDialog
         open={showBatchVideoDialog}

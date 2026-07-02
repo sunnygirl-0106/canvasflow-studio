@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { X, Zap } from "lucide-react";
+import { X, ImageIcon, ChevronDown, Sliders } from "lucide-react";
 import type { ScriptAsset } from "@/store/types";
+import { estimateImageCost } from "@/lib/cost";
 
 interface Props {
   open: boolean;
   assets: ScriptAsset[];
   onGenerate: (assetIds: string[]) => void;
   onClose: () => void;
+  /** Image model used for the estimate; matches the canvas image node default. */
+  model?: string;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -17,12 +20,24 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TYPE_ORDER: ScriptAsset["type"][] = ["character", "scene", "prop"];
 
-export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: Props) {
+export function GenerateAllAssetsDialog({
+  open,
+  assets,
+  onGenerate,
+  onClose,
+  model = "phan-nano-l",
+}: Props) {
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(assets.filter((a) => !a.image).map((a) => a.id)),
   );
 
   if (!open) return null;
+
+  // Cost mirrors what each materialized image node would show on the canvas:
+  // the sum of per-asset estimateImageCost over the selected assets.
+  const totalCost = assets
+    .filter((a) => selected.has(a.id))
+    .reduce((sum, a) => sum + estimateImageCost(a.description ?? "", model), 0);
 
   const allSelected = selected.size === assets.length && assets.length > 0;
   const toggleAll = () => {
@@ -45,15 +60,15 @@ export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: P
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.4)" }}
+      style={{ background: "rgba(0,0,0,0.6)" }}
     >
       <div
         className="rounded-2xl flex flex-col"
         style={{
           width: 640,
           maxHeight: "75vh",
-          background: "#FFFFFF",
-          boxShadow: "0 24px 64px rgba(15,23,42,0.22)",
+          background: "#1F2125",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
           fontFamily: "PingFang SC, Inter, system-ui",
         }}
       >
@@ -62,11 +77,11 @@ export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: P
           className="flex items-center justify-between flex-shrink-0"
           style={{ padding: "20px 24px 12px" }}
         >
-          <span className="text-[16px] font-semibold" style={{ color: "#0F172A" }}>
+          <span className="text-[16px] font-semibold" style={{ color: "#E5E7EB" }}>
             一键生成所有资产
           </span>
           <button
-            className="flex items-center justify-center rounded-lg hover:bg-slate-100"
+            className="flex items-center justify-center rounded-lg hover:bg-white/5"
             style={{ width: 30, height: 30 }}
             onClick={onClose}
           >
@@ -78,7 +93,7 @@ export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: P
         <div className="flex items-center gap-3 flex-shrink-0" style={{ padding: "0 24px 12px" }}>
           <label
             className="flex items-center gap-2 cursor-pointer text-[13px]"
-            style={{ color: "#374151" }}
+            style={{ color: "#E5E7EB" }}
           >
             <input
               type="checkbox"
@@ -103,10 +118,10 @@ export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: P
               {group.items.map((asset) => (
                 <div
                   key={asset.id}
-                  className="flex items-center gap-3 rounded-lg transition-colors hover:bg-slate-50"
+                  className="flex items-center gap-3 rounded-lg transition-colors hover:bg-white/5"
                   style={{
                     padding: "8px 12px",
-                    borderBottom: "1px solid #F1F5F9",
+                    borderBottom: "1px solid #2A2D33",
                   }}
                 >
                   <input
@@ -117,7 +132,7 @@ export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: P
                   />
                   <span
                     className="text-[13px] font-medium flex-shrink-0"
-                    style={{ color: "#334155", minWidth: 60 }}
+                    style={{ color: "#E5E7EB", minWidth: 60 }}
                   >
                     {asset.name}
                   </span>
@@ -125,8 +140,8 @@ export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: P
                     <span
                       className="text-[11px] rounded px-1.5 py-0.5"
                       style={{
-                        background: "#ECFDF5",
-                        color: "#059669",
+                        background: "#132A1C",
+                        color: "#22C55E",
                       }}
                     >
                       已有图片
@@ -146,40 +161,86 @@ export function GenerateAllAssetsDialog({ open, assets, onGenerate, onClose }: P
           className="flex items-center justify-between flex-shrink-0 rounded-b-2xl"
           style={{
             padding: "14px 24px",
-            borderTop: "1px solid #F1F5F9",
-            background: "#FAFAFA",
+            borderTop: "1px solid #2A2D33",
+            background: "#15171A",
           }}
         >
+          {/* Left: model selector + params — aligned with the canvas image
+              node prompt panel spec. */}
+          <div className="flex items-center gap-2">
+            <button
+              className="flex items-center gap-1.5 rounded-lg"
+              style={{ padding: "6px 10px", background: "transparent" }}
+            >
+              <span
+                className="inline-flex items-center justify-center rounded-md"
+                style={{ width: 16, height: 16 }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="#14B8A6"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <circle cx="12" cy="12" r="8" strokeDasharray="2 2" opacity="0.6" />
+                </svg>
+              </span>
+              <span
+                className="text-[13px] font-semibold truncate"
+                style={{ color: "#E5E7EB", maxWidth: 120 }}
+              >
+                {model}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5" style={{ color: "#6B7280" }} strokeWidth={2} />
+            </button>
+            <span className="inline-block" style={{ width: 1, height: 16, background: "#2A2D33" }} />
+            <button
+              className="flex items-center gap-1.5 rounded-lg"
+              style={{ padding: "6px 10px", background: "transparent" }}
+            >
+              <Sliders className="w-4 h-4" style={{ color: "#9CA3AF" }} strokeWidth={1.8} />
+              <span className="text-[13px] font-medium" style={{ color: "#E5E7EB" }}>
+                参数
+              </span>
+            </button>
+          </div>
+
+          {/* Right: predicted star-diamond cost + generate. */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-[12px]" style={{ color: "#6B7280" }}>
-              <span>模型:</span>
-              <span style={{ color: "#334155" }}>FLUX</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[12px]" style={{ color: "#6B7280" }}>
-              <span>画质:</span>
-              <span style={{ color: "#334155" }}>高清</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5" style={{ color: "#F59E0B" }} />
-              <span className="text-[12px]" style={{ color: "#6B7280" }}>
-                {selected.size * 12}
+            <div
+              className="text-[12px] flex items-center gap-1.5"
+              style={{ color: "#9CA3AF", fontFamily: "PingFang SC, Inter, system-ui" }}
+            >
+              <ImageIcon className="w-3.5 h-3.5" style={{ color: "#9CA3AF" }} strokeWidth={1.8} />
+              <span style={{ color: "#E5E7EB" }}>{selected.size}张</span>
+              <span>预计消耗</span>
+              <span className="text-[13px] font-bold" style={{ color: "#E5E7EB" }}>
+                {totalCost}
+              </span>
+              <span style={{ color: "#E5E7EB" }}>星钻</span>
+              <span className="text-[12px] font-semibold" style={{ color: "#22C55E" }}>
+                已豁免
               </span>
             </div>
+            <button
+              className="text-[13px] font-semibold rounded-lg transition-colors hover:opacity-90 disabled:opacity-40"
+              style={{
+                padding: "8px 24px",
+                background: "#14B8A6",
+                color: "#0B1220",
+              }}
+              disabled={selected.size === 0}
+              onClick={() => {
+                onGenerate(Array.from(selected));
+                onClose();
+              }}
+            >
+              生成 ({selected.size})
+            </button>
           </div>
-          <button
-            className="text-[13px] font-semibold rounded-lg text-white transition-colors hover:opacity-90 disabled:opacity-40"
-            style={{
-              padding: "8px 24px",
-              background: "#1F2937",
-            }}
-            disabled={selected.size === 0}
-            onClick={() => {
-              onGenerate(Array.from(selected));
-              onClose();
-            }}
-          >
-            生成 ({selected.size})
-          </button>
         </div>
       </div>
     </div>

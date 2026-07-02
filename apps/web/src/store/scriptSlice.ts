@@ -32,6 +32,18 @@ import {
 
 // ── Script helpers ────────────────────────────────────────────────────────────
 
+/**
+ * Pick a rich "global style" line for the 准备资产 page based on the source
+ * text. Mirrors the theme split in the API's pickFixture (历史剧 vs 生活片) so
+ * the style matches whichever fixture will be streamed back.
+ */
+function pickGlobalStyle(sourceText: string): string {
+  if (/凤回巢|重生|权倾|古风|死牢/.test(sourceText)) {
+    return "凤回巢·国风古装权谋。冷冽青灰主色调，暖金烛火点缀，强对比布光与丁达尔光束；精致工笔厚涂质感，服化道考究，电影级景深与颗粒感。";
+  }
+  return "夏日初晴晚风·清新治愈日系。低饱和暖调，柔和自然光与丁达尔光束，通透空气感；细腻胶片颗粒，浅景深虚化，青春纪实的生活质感。";
+}
+
 const scriptAbortMap = new Map<string, AbortController>();
 // Live mock-progress timers keyed by script id, so we can cancel them when the
 // script editor closes or a new run starts — otherwise the interval keeps
@@ -177,6 +189,7 @@ export function createScriptSlice(set: SetState, get: GetState) {
           status: "generating",
           shots: [],
           sourceText: srcText,
+          globalStyle: pickGlobalStyle(srcText),
           error: undefined,
           progress: 0,
         }),
@@ -696,7 +709,7 @@ export function createScriptSlice(set: SetState, get: GetState) {
           kind: "image" as NodeKind,
           name: a.name,
         })),
-        groupColor: "#6366F1",
+        groupColor: "#64748B",
         extraData: { connectable: false, sourceScriptId: scriptId },
       });
 
@@ -726,6 +739,10 @@ export function createScriptSlice(set: SetState, get: GetState) {
               name: a.name,
               src: a.image,
               status: "ready",
+              // Carry the asset's description over as the node's prompt so the
+              // prompt panel is pre-filled with the same words used in 准备资产
+              // (e.g. "17岁少女，短发，白衬衫，神情专注地举起相机").
+              prompt: a.description ?? "",
               assetScriptId: scriptId,
               assetId: a.id,
             },

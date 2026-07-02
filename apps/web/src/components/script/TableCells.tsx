@@ -5,74 +5,24 @@ import type { ScriptShot } from "@canvasflow/shared";
 import { parseDescription } from "@/lib/assetUtils";
 import { useAssetUpload } from "@/lib/useAssetUpload";
 import { FinalPromptModal } from "./FinalPromptModal";
+import { CellPopover } from "./CellPopover";
 
-/* ── Wrapping text cell (no truncation) ────────────────────────────── */
+/* ── Wrapping text cell (popover editor) ───────────────────────────── */
 
 export function WrapCell({
   value,
   onChange,
+  placeholder,
   style: extraStyle,
 }: {
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
   style?: React.CSSProperties;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (editing) {
-      setDraft(value);
-      requestAnimationFrame(() => {
-        ref.current?.focus();
-        ref.current?.select();
-      });
-    }
-  }, [editing, value]);
-
-  if (editing) {
-    return (
-      <td className="align-top" style={{ padding: "6px 8px", ...extraStyle }}>
-        <textarea
-          ref={ref}
-          className="w-full rounded text-[12px] outline-none resize-none"
-          style={{
-            padding: "4px 6px",
-            background: "#FFFFFF",
-            border: "1px solid #3B82F6",
-            color: "#1A1A1A",
-            minWidth: 80,
-            minHeight: 60,
-          }}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            if (draft !== value) onChange(draft);
-            setEditing(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setEditing(false);
-          }}
-        />
-      </td>
-    );
-  }
-
   return (
-    <td
-      className="cursor-text align-top"
-      style={{
-        padding: "10px 12px",
-        color: "#374151",
-        lineHeight: 1.6,
-        whiteSpace: "normal",
-        wordBreak: "break-all",
-        ...extraStyle,
-      }}
-      onDoubleClick={() => setEditing(true)}
-    >
-      {value || <span style={{ color: "#D1D5DB" }}>—</span>}
+    <td className="align-top" style={{ padding: "10px 12px", ...extraStyle }}>
+      <CellPopover value={value} onChange={onChange} placeholder={placeholder} />
     </td>
   );
 }
@@ -82,79 +32,31 @@ export function WrapCell({
 export function DescriptionCell({
   value,
   onChange,
+  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (editing) {
-      setDraft(value);
-      requestAnimationFrame(() => {
-        ref.current?.focus();
-        ref.current?.select();
-      });
-    }
-  }, [editing, value]);
-
-  if (editing) {
-    return (
-      <td className="align-top" style={{ padding: "6px 8px" }}>
-        <textarea
-          ref={ref}
-          className="w-full rounded text-[12px] outline-none resize-none"
-          style={{
-            padding: "4px 6px",
-            background: "#FFFFFF",
-            border: "1px solid #3B82F6",
-            color: "#1A1A1A",
-            minWidth: 80,
-            minHeight: 60,
-          }}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            if (draft !== value) onChange(draft);
-            setEditing(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setEditing(false);
-          }}
-        />
-      </td>
-    );
-  }
-
-  const segments = parseDescription(value);
-
   return (
-    <td
-      className="cursor-text align-top"
-      style={{
-        padding: "10px 12px",
-        color: "#374151",
-        lineHeight: 1.6,
-        whiteSpace: "normal",
-        wordBreak: "break-all",
-      }}
-      onDoubleClick={() => setEditing(true)}
-    >
-      {segments.length > 0 ? (
-        segments.map((seg, i) =>
-          seg.type === "mention" ? (
-            <span key={i} style={{ color: "#22D3EE" }}>
-              @{seg.value}
-            </span>
-          ) : (
-            <span key={i}>{seg.value}</span>
-          ),
-        )
-      ) : (
-        <span style={{ color: "#D1D5DB" }}>--</span>
-      )}
+    <td className="align-top" style={{ padding: "10px 12px" }}>
+      <CellPopover
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        renderValue={(v) => {
+          const segments = parseDescription(v);
+          return segments.map((seg, i) =>
+            seg.type === "mention" ? (
+              <span key={i} style={{ color: "#22D3EE" }}>
+                @{seg.value}
+              </span>
+            ) : (
+              <span key={i}>{seg.value}</span>
+            ),
+          );
+        }}
+      />
     </td>
   );
 }
@@ -181,7 +83,7 @@ export function FinalPromptCell({ shot, nodeId }: { shot: ScriptShot; nodeId: st
       <td className="align-top" style={{ padding: "10px 12px" }}>
         <button
           className="text-[12px] font-medium transition-colors hover:underline"
-          style={{ color: "#3B82F6" }}
+          style={{ color: "#14B8A6" }}
           onClick={() => setModalOpen(true)}
         >
           查看提示词
@@ -195,7 +97,7 @@ export function FinalPromptCell({ shot, nodeId }: { shot: ScriptShot; nodeId: st
 
   return (
     <td className="align-top" style={{ padding: "10px 12px" }}>
-      <span className="text-[12px]" style={{ color: "#D1D5DB" }}>
+      <span className="text-[12px]" style={{ color: "#6B7280" }}>
         待生成提示词
       </span>
     </td>
@@ -243,7 +145,7 @@ export function ImageCell({
       {uploading ? (
         <div
           className="rounded flex items-center justify-center"
-          style={{ width: 40, height: 30, background: "#F3F4F6" }}
+          style={{ width: 40, height: 30, background: "#2A2D33" }}
         >
           <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#9CA3AF" }} />
         </div>
@@ -257,11 +159,11 @@ export function ImageCell({
         </div>
       ) : (
         <button
-          className="rounded flex items-center justify-center text-[11px] font-medium transition-colors hover:bg-gray-50"
+          className="rounded flex items-center justify-center text-[11px] font-medium transition-colors hover:bg-white/5"
           style={{
             width: 40,
             height: 30,
-            border: "1px dashed #D1D5DB",
+            border: "1px dashed #3F4248",
             color: "#9CA3AF",
           }}
           onClick={() => setMenuOpen(!menuOpen)}
@@ -278,14 +180,14 @@ export function ImageCell({
             left: 0,
             marginTop: 4,
             minWidth: 120,
-            background: "#FFFFFF",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-            border: "1px solid #E5E7EB",
+            background: "#1F2125",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+            border: "1px solid #2A2D33",
           }}
         >
           <button
-            className="w-full text-left text-[13px] hover:bg-gray-50 transition-colors"
-            style={{ padding: "10px 16px", color: "#1A1A1A" }}
+            className="w-full text-left text-[13px] hover:bg-white/5 transition-colors"
+            style={{ padding: "10px 16px", color: "#E5E7EB" }}
             onClick={() => {
               setMenuOpen(false);
               fileRef.current?.click();
@@ -294,8 +196,8 @@ export function ImageCell({
             本地上传
           </button>
           <button
-            className="w-full text-left text-[13px] hover:bg-gray-50 transition-colors"
-            style={{ padding: "10px 16px", color: "#1A1A1A", borderTop: "1px solid #F3F4F6" }}
+            className="w-full text-left text-[13px] hover:bg-white/5 transition-colors"
+            style={{ padding: "10px 16px", color: "#E5E7EB", borderTop: "1px solid #2A2D33" }}
             onClick={() => {
               setMenuOpen(false);
             }}
@@ -304,8 +206,8 @@ export function ImageCell({
           </button>
           {src && (
             <button
-              className="w-full text-left text-[13px] hover:bg-red-50 transition-colors"
-              style={{ padding: "10px 16px", color: "#EF4444", borderTop: "1px solid #F3F4F6" }}
+              className="w-full text-left text-[13px] hover:bg-red-500/10 transition-colors"
+              style={{ padding: "10px 16px", color: "#EF4444", borderTop: "1px solid #2A2D33" }}
               onClick={() => {
                 setMenuOpen(false);
                 onRemove();

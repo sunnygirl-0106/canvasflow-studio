@@ -34,23 +34,23 @@ export function AssetEditSidebar({ nodeId, assetId, onClose }: Props) {
       className="flex flex-col flex-shrink-0"
       style={{
         width: 400,
-        borderLeft: "1px solid #E5E7EB",
-        background: "#FFFFFF",
+        borderLeft: "1px solid #2A2D33",
+        background: "#1F2125",
       }}
     >
       {/* Header */}
       <div
         className="flex items-center justify-between flex-shrink-0"
-        style={{ padding: "16px 20px", borderBottom: "1px solid #F3F4F6" }}
+        style={{ padding: "16px 20px", borderBottom: "1px solid #2A2D33" }}
       >
         <span
           className="text-[15px] font-semibold"
-          style={{ color: "#0F172A", fontFamily: "PingFang SC, Inter, system-ui" }}
+          style={{ color: "#E5E7EB", fontFamily: "PingFang SC, Inter, system-ui" }}
         >
           编辑{typeLabel}
         </span>
         <button
-          className="flex items-center justify-center rounded-lg hover:bg-gray-100"
+          className="flex items-center justify-center rounded-lg hover:bg-white/5"
           style={{ width: 28, height: 28 }}
           onClick={onClose}
         >
@@ -67,8 +67,8 @@ export function AssetEditSidebar({ nodeId, assetId, onClose }: Props) {
             style={{
               width: "100%",
               aspectRatio: "1",
-              background: "#F1F5F9",
-              border: "1px solid #E2E8F0",
+              background: "#15171A",
+              border: "1px solid #2A2D33",
             }}
           >
             {asset.image ? (
@@ -85,16 +85,16 @@ export function AssetEditSidebar({ nodeId, assetId, onClose }: Props) {
             )}
           </div>
           <button
-            className="absolute top-2 right-2 flex items-center justify-center rounded-lg transition-colors hover:bg-white/80"
+            className="absolute top-2 right-2 flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
             style={{
               width: 28,
               height: 28,
-              background: "rgba(255,255,255,0.6)",
+              background: "rgba(15,17,20,0.6)",
               backdropFilter: "blur(4px)",
             }}
             onClick={() => setPickerOpen(true)}
           >
-            <MoreHorizontal className="w-4 h-4" style={{ color: "#374151" }} />
+            <MoreHorizontal className="w-4 h-4" style={{ color: "#E5E7EB" }} />
           </button>
         </div>
 
@@ -107,8 +107,9 @@ export function AssetEditSidebar({ nodeId, assetId, onClose }: Props) {
             className="w-full rounded-lg text-[13px] outline-none transition-colors"
             style={{
               padding: "8px 12px",
-              border: "1px solid #E5E7EB",
-              color: "#1A1A1A",
+              border: "1px solid #2A2D33",
+              background: "#15171A",
+              color: "#E5E7EB",
             }}
             value={asset.name}
             onChange={(e) => updateAsset(nodeId, assetId, { name: e.target.value })}
@@ -125,8 +126,9 @@ export function AssetEditSidebar({ nodeId, assetId, onClose }: Props) {
             style={{
               padding: "8px 12px",
               minHeight: 120,
-              border: "1px solid #E5E7EB",
-              color: "#1A1A1A",
+              border: "1px solid #2A2D33",
+              background: "#15171A",
+              color: "#E5E7EB",
             }}
             value={asset.description ?? ""}
             onChange={(e) => updateAsset(nodeId, assetId, { description: e.target.value })}

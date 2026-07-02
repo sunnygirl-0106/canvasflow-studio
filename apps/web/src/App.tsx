@@ -118,7 +118,9 @@ const nodeTypes = {
   ),
   nodeGroup: (props: NodeProps) => <GroupNode id={props.id} data={props.data as GroupNodeData} />,
   text: (props: NodeProps) => <TextNode id={props.id} data={props.data as TextNodeData} />,
-  script: (props: NodeProps) => <ScriptNode id={props.id} data={props.data as ScriptNodeData} />,
+  script: (props: NodeProps) => (
+    <ScriptNode id={props.id} data={props.data as ScriptNodeData} selected={props.selected} />
+  ),
   director: (props: NodeProps) => (
     <DirectorNode id={props.id} data={props.data as DirectorNodeData} />
   ),
@@ -168,15 +170,26 @@ function Canvas() {
 
   const rfNodes = useMemo<RFNode[]>(
     () =>
-      nodes.map((n) => ({
-        id: n.id,
-        type: n.kind,
-        position: { x: n.x, y: n.y },
-        data: n.data,
-        draggable: true,
-        selectable: true,
-        selected: selectedIds.has(n.id),
-      })),
+      nodes.map((n) => {
+        // Group/storyboard containers must always paint BEHIND their member
+        // nodes (see elevateNodesOnSelect={false} below). We assign explicit
+        // z-indices instead of relying on array order: containers at 0, regular
+        // nodes at 1, and a selected NON-container node at 1000 so its
+        // downward-overflowing prompt panel renders above sibling nodes rather
+        // than being covered by the next grid row. Containers are never lifted.
+        const isContainer = n.kind === "nodeGroup" || n.kind === "storyboard";
+        const isSelected = selectedIds.has(n.id);
+        return {
+          id: n.id,
+          type: n.kind,
+          position: { x: n.x, y: n.y },
+          data: n.data,
+          draggable: true,
+          selectable: true,
+          selected: isSelected,
+          zIndex: isContainer ? 0 : isSelected ? 1000 : 1,
+        };
+      }),
     [nodes, selectedIds],
   );
 

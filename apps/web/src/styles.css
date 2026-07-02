@@ -183,6 +183,44 @@
 
 input, textarea, select { font-family: inherit; }
 
+/* Dark scrollbars — the app UI is dark, but native scrollbars default to a
+   light theme (visible on the script editor's 确认镜头 / 准备资产 / 合成提示词
+   scroll areas, both the bottom horizontal and right vertical bars). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3F4248 transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #3F4248;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dark native <select> boxes and their option lists. */
+select {
+  background: #1F2125;
+  color: #E5E7EB;
+}
+select option {
+  background: #1F2125;
+  color: #E5E7EB;
+}
+
 /* Zoom slider thumb */
 .zoom-slider::-webkit-slider-thumb {
   -webkit-appearance: none;

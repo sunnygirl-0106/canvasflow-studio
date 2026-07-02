@@ -35,7 +35,6 @@ export function ComposePromptsStep({ nodeId, script }: Props) {
           nodeId={nodeId}
           script={script}
           visibleColumnOverride={STEP3_COLUMNS}
-          showActionsColumn={true}
           renderDialogueCell={(shot) => (
             <DialoguePopover
               value={shot.dialogue}
@@ -54,10 +53,11 @@ export function ComposePromptsStep({ nodeId, script }: Props) {
           已合成 {composedCount}/{script.shots.length} 镜
         </span>
         <button
-          className="flex items-center gap-2 text-[13px] font-semibold rounded-lg text-white transition-colors hover:opacity-90"
+          className="flex items-center gap-2 text-[13px] font-semibold rounded-lg transition-colors hover:opacity-90"
           style={{
             padding: "8px 20px",
-            background: "#1F2937",
+            background: "#14B8A6",
+            color: "#0B1220",
           }}
           onClick={() => setDialogOpen(true)}
         >
@@ -69,6 +69,7 @@ export function ComposePromptsStep({ nodeId, script }: Props) {
       <ComposePromptsDialog
         open={dialogOpen}
         shots={script.shots}
+        model={script.model}
         onCompose={(shotIds) => composeFinalPrompts(nodeId, shotIds)}
         onClose={() => setDialogOpen(false)}
       />

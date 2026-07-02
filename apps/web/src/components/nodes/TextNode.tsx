@@ -68,14 +68,15 @@ function TextNodeImpl({ id, data }: { id: string; data: TextNodeData }) {
         </button>
       </div>
 
-      {/* Dashed body box */}
+      {/* Dashed body box. overflow:visible so the right-side connect handle —
+          which CSS positions just outside the box edge — isn't clipped away. */}
       <div
         className="relative rounded-2xl flex flex-col"
         style={{
           height: 300,
           background: BG,
           border: `1.5px dashed ${DASH}`,
-          overflow: "hidden",
+          overflow: "visible",
         }}
         onDoubleClick={() => !editing && setEditing(true)}
       >

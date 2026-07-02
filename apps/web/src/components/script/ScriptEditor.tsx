@@ -32,19 +32,19 @@ export function ScriptEditor() {
   const goToStep = (step: WizardStep) => setScriptWizardStep(nodeId, step);
 
   return createPortal(
-    <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#FFFFFF" }}>
+    <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#1F2125" }}>
       {/* ── Title bar ────────────────────────────────────── */}
       <div
         className="flex items-center justify-between flex-shrink-0"
         style={{
           height: 72,
           padding: "0 24px",
-          borderBottom: "1px solid #E5E7EB",
+          borderBottom: "1px solid #2A2D33",
         }}
       >
         <span
           className="text-[15px] font-bold"
-          style={{ color: "#1A1A1A", fontFamily: "PingFang SC, Inter, system-ui" }}
+          style={{ color: "#E5E7EB", fontFamily: "PingFang SC, Inter, system-ui" }}
         >
           {script.title}
         </span>
@@ -66,20 +66,20 @@ export function ScriptEditor() {
               className="flex items-center gap-2 text-[12px] rounded-lg"
               style={{
                 padding: "6px 12px",
-                background: "#F0FDF4",
-                color: "#166534",
-                border: "1px solid #BBF7D0",
+                background: "#132A1C",
+                color: "#4ADE80",
+                border: "1px solid #166534",
               }}
             >
               <span>{currentStep}/3 完成后可批量生视频</span>
-              <button className="hover:text-green-800" onClick={() => setHintVisible(false)}>
+              <button className="hover:text-green-400" onClick={() => setHintVisible(false)}>
                 <X className="w-3 h-3" />
               </button>
             </div>
           )}
           <button
             onClick={closeScript}
-            className="flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors"
+            className="flex items-center justify-center rounded-md hover:bg-white/5 transition-colors"
             style={{ width: 32, height: 32 }}
             title="关闭"
           >

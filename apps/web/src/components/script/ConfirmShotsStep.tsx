@@ -31,7 +31,6 @@ export function ConfirmShotsStep({ nodeId, script, onNext }: Props) {
           nodeId={nodeId}
           script={script}
           visibleColumnOverride={STEP1_COLUMNS}
-          showActionsColumn={true}
           renderDialogueCell={(shot) => (
             <DialoguePopover
               value={shot.dialogue}
@@ -47,11 +46,11 @@ export function ConfirmShotsStep({ nodeId, script, onNext }: Props) {
         style={{ padding: "16px 0 0" }}
       >
         <button
-          className="flex items-center gap-1.5 text-[13px] font-medium rounded-lg transition-colors hover:bg-gray-100"
+          className="flex items-center gap-1.5 text-[13px] font-medium rounded-lg transition-colors hover:bg-white/5"
           style={{
             padding: "8px 16px",
-            color: "#374151",
-            border: "1px solid #E5E7EB",
+            color: "#E5E7EB",
+            border: "1px solid #2A2D33",
           }}
           onClick={() => addScriptShot(nodeId)}
         >
@@ -59,10 +58,11 @@ export function ConfirmShotsStep({ nodeId, script, onNext }: Props) {
           添加镜头
         </button>
         <button
-          className="flex items-center gap-1.5 text-[13px] font-semibold rounded-lg text-white transition-colors hover:opacity-90"
+          className="flex items-center gap-1.5 text-[13px] font-semibold rounded-lg transition-colors hover:opacity-90"
           style={{
             padding: "8px 20px",
-            background: "#1F2937",
+            background: "#14B8A6",
+            color: "#0B1220",
           }}
           onClick={onNext}
         >
