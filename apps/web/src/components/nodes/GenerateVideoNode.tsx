@@ -6,6 +6,7 @@ import { useCanvas, type GenerateVideoNodeData, type CanvasNode } from "@/store/
 import { VideoPromptPanel } from "@/components/VideoPromptPanel";
 import { useStoryboardMembership } from "@/lib/useStoryboardMembership";
 import { useIsMultiSelected } from "@/lib/useIsMultiSelected";
+import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import { ShotIndexBadge } from "./ShotIndexBadge";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
 
@@ -37,12 +38,17 @@ function GenerateVideoNodeImpl({
   // container only repositions it. The shot-index badge is overlaid below.
 
   const onUploadClick = () => fileRef.current?.click();
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    updateNode(id, (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode);
-    e.target.value = "";
+    input.value = "";
+    try {
+      const url = await fileToDataUrl(file);
+      updateNode(id, (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "上传失败");
+    }
   };
 
   return (

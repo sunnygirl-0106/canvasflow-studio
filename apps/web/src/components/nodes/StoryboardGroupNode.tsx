@@ -10,6 +10,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { placeholderImage } from "@canvasflow/shared";
+import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import type { StoryboardNodeData } from "@/store/canvasStore";
 import { useCanvas } from "@/store/canvasStore";
 import {
@@ -59,11 +60,17 @@ function StoryboardGroupNodeImpl({ id, data }: { id: string; data: StoryboardNod
   const appendX = SB_PAD_X + appendCol * (cw + SB_CELL_GAP_X) + cw / 2;
   const appendY = SB_HEADER_H + appendRow * (ch + SB_CELL_GAP_Y) + ch / 2;
 
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) addMember(id, { src: URL.createObjectURL(file) });
-    e.target.value = "";
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = "";
     setMenuOpen(false);
+    if (!file) return;
+    try {
+      addMember(id, { src: await fileToDataUrl(file) });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "上传失败");
+    }
   };
 
   return (

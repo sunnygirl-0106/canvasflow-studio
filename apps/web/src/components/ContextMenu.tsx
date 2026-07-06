@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
 import { useCanvas, type CanvasNode, type NodeKind } from "@/store/canvasStore";
+import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import { ConfirmDialog } from "@/components/storyboard/ConfirmDialog";
 
 const MEDIA_KINDS: NodeKind[] = ["image", "generateImage", "generateVideo"];
@@ -226,16 +227,20 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = () => {
+    input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const url = URL.createObjectURL(file);
-      const id = addNodeAtPosition("generateImage", pos.x, pos.y);
-      updateNode(
-        id,
-        (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
-      );
-      select(id);
+      try {
+        const url = await fileToDataUrl(file);
+        const id = addNodeAtPosition("generateImage", pos.x, pos.y);
+        updateNode(
+          id,
+          (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
+        );
+        select(id);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "上传失败");
+      }
     };
     input.click();
   };

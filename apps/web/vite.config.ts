@@ -5,6 +5,18 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), tsconfigPaths()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Split heavy vendor libs into their own long-lived chunks so app-code
+        // edits don't bust their cache, and they don't bloat the entry chunk.
+        manualChunks: {
+          "react-flow": ["@xyflow/react"],
+          "lucide": ["lucide-react"],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

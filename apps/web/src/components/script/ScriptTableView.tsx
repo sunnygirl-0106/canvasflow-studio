@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import {
   useCanvas,
@@ -62,15 +63,19 @@ export function ScriptTableView({
   visibleColumnOverride,
   renderDialogueCell,
 }: Props) {
-  const updateScriptShot = useCanvas((s) => s.updateScriptShot);
-  const updateScriptCharacter = useCanvas((s) => s.updateScriptCharacter);
-  const removeScriptShot = useCanvas((s) => s.removeScriptShot);
-  const setScriptImage = useCanvas((s) => s.setScriptImage);
-  const removeScriptImage = useCanvas((s) => s.removeScriptImage);
-
-  const visible = visibleColumnOverride ?? visibleColumns(script.hiddenColumns);
-  const filtered = filterShots(script.shots, script.filter);
-  const charCount = characterGroupCount(script.shots);
+  // Memoize the derived arrays/counts so they keep a stable identity across
+  // re-renders — this is what lets the memoized <ShotRow> below skip re-rendering
+  // every row on each keystroke (only the edited shot, whose object identity
+  // changed, re-renders).
+  const visible = useMemo(
+    () => visibleColumnOverride ?? visibleColumns(script.hiddenColumns),
+    [visibleColumnOverride, script.hiddenColumns],
+  );
+  const filtered = useMemo(
+    () => filterShots(script.shots, script.filter),
+    [script.shots, script.filter],
+  );
+  const charCount = useMemo(() => characterGroupCount(script.shots), [script.shots]);
 
   // Build the proportional column-width list once so <colgroup> (which drives
   // the fixed layout) and the natural min-width stay in sync. Character groups
@@ -178,144 +183,14 @@ export function ScriptTableView({
           </thead>
           <tbody>
             {filtered.map((shot) => (
-              <tr key={shot.id} className="group/row" style={{ borderTop: "1px solid #2A2D33" }}>
-                {/* Index */}
-                <td
-                  className="font-mono text-[12px] align-top"
-                  style={{
-                    padding: "10px 12px",
-                    color: "#9CA3AF",
-                    background: "transparent",
-                  }}
-                >
-                  {shot.index}
-                </td>
-                {visible.map((key) => {
-                  if (key === "characters") {
-                    const cells: React.ReactNode[] = [];
-                    for (let gi = 0; gi < Math.max(1, charCount); gi++) {
-                      const char = shot.characters[gi];
-                      cells.push(
-                        <WrapCell
-                          key={`${shot.id}-char-${gi}-name`}
-                          value={char?.name ?? ""}
-                          placeholder={`输入角色${gi + 1}的名字，如 少女`}
-                          onChange={(v) =>
-                            char
-                              ? updateScriptCharacter(nodeId, shot.id, char.id, { name: v })
-                              : undefined
-                          }
-                          style={{ borderLeft: gi > 0 ? "1px solid #2A2D33" : undefined }}
-                        />,
-                        <WrapCell
-                          key={`${shot.id}-char-${gi}-desc`}
-                          value={char?.desc ?? ""}
-                          placeholder="描述角色的外形、服饰与气质，如 白裙、扎马尾的少女"
-                          onChange={(v) =>
-                            char
-                              ? updateScriptCharacter(nodeId, shot.id, char.id, { desc: v })
-                              : undefined
-                          }
-                        />,
-                        <ImageCell
-                          key={`${shot.id}-char-${gi}-img`}
-                          src={char?.image}
-                          onUpload={(src) =>
-                            char
-                              ? setScriptImage(
-                                  nodeId,
-                                  shot.id,
-                                  { kind: "character", charId: char.id },
-                                  src,
-                                )
-                              : undefined
-                          }
-                          onRemove={() =>
-                            char
-                              ? removeScriptImage(nodeId, shot.id, {
-                                  kind: "character",
-                                  charId: char.id,
-                                })
-                              : undefined
-                          }
-                        />,
-                      );
-                    }
-                    return cells;
-                  }
-                  if (key === "refImage") {
-                    return (
-                      <ImageCell
-                        key={`${shot.id}-ref`}
-                        src={shot.refImage}
-                        onUpload={(src) => setScriptImage(nodeId, shot.id, { kind: "ref" }, src)}
-                        onRemove={() => removeScriptImage(nodeId, shot.id, { kind: "ref" })}
-                      />
-                    );
-                  }
-                  // Description cell with @mention rendering
-                  if (key === "description") {
-                    return (
-                      <DescriptionCell
-                        key={`${shot.id}-description`}
-                        value={shot.description}
-                        placeholder={CELL_PLACEHOLDER.description}
-                        onChange={(v) => updateScriptShot(nodeId, shot.id, { description: v })}
-                      />
-                    );
-                  }
-                  // Dialogue cell with optional popover override
-                  if (key === "dialogue" && renderDialogueCell) {
-                    return (
-                      <td
-                        key={`${shot.id}-dialogue`}
-                        className="align-top"
-                        style={{ padding: "10px 12px" }}
-                      >
-                        {renderDialogueCell(shot)}
-                      </td>
-                    );
-                  }
-                  // Final prompt column — status-based rendering
-                  if (key === "finalPrompt") {
-                    return (
-                      <FinalPromptCell key={`${shot.id}-finalPrompt`} shot={shot} nodeId={nodeId} />
-                    );
-                  }
-                  const field = TEXT_FIELDS[key];
-                  if (!field) return <td key={key} />;
-                  return (
-                    <WrapCell
-                      key={`${shot.id}-${key}`}
-                      value={String(shot[field] ?? "")}
-                      placeholder={CELL_PLACEHOLDER[key]}
-                      onChange={(v) => {
-                        if (field === "duration") {
-                          const num = parseFloat(v);
-                          if (!isNaN(num) && num > 0)
-                            updateScriptShot(nodeId, shot.id, { duration: num });
-                          return;
-                        }
-                        updateScriptShot(nodeId, shot.id, {
-                          [field]: v,
-                        } as Partial<ScriptShot>);
-                      }}
-                    />
-                  );
-                })}
-                {/* Delete */}
-                <td className="align-top" style={{ padding: "8px 4px" }}>
-                  <button
-                    className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center rounded hover:bg-red-500/10 transition-opacity"
-                    style={{ width: 24, height: 24 }}
-                    onClick={() => {
-                      if (confirm(`删除第 ${shot.index} 镜？`)) removeScriptShot(nodeId, shot.id);
-                    }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" style={{ color: "#EF4444" }} />
-                  </button>
-                </td>
-              </tr>
+              <ShotRow
+                key={shot.id}
+                shot={shot}
+                nodeId={nodeId}
+                visible={visible}
+                charCount={charCount}
+                renderDialogueCell={renderDialogueCell}
+              />
             ))}
           </tbody>
         </table>
@@ -328,3 +203,158 @@ export function ScriptTableView({
     </div>
   );
 }
+
+interface ShotRowProps {
+  shot: ScriptShot;
+  nodeId: string;
+  visible: ScriptColumnKey[];
+  charCount: number;
+  renderDialogueCell?: (shot: ScriptShot) => React.ReactNode;
+}
+
+/**
+ * One table row. Memoized so that editing a single cell only re-renders that
+ * shot's row: the parent re-renders on every store change, but `shot` keeps its
+ * identity for untouched rows (zustand structural sharing) and the other props
+ * are stable (memoized arrays / stable store actions / a `useCallback`-wrapped
+ * `renderDialogueCell`). Store actions are read here rather than passed down so
+ * the props surface stays small and stable.
+ */
+const ShotRow = memo(function ShotRow({
+  shot,
+  nodeId,
+  visible,
+  charCount,
+  renderDialogueCell,
+}: ShotRowProps) {
+  const updateScriptShot = useCanvas((s) => s.updateScriptShot);
+  const updateScriptCharacter = useCanvas((s) => s.updateScriptCharacter);
+  const removeScriptShot = useCanvas((s) => s.removeScriptShot);
+  const setScriptImage = useCanvas((s) => s.setScriptImage);
+  const removeScriptImage = useCanvas((s) => s.removeScriptImage);
+
+  return (
+    <tr className="group/row" style={{ borderTop: "1px solid #2A2D33" }}>
+      {/* Index */}
+      <td
+        className="font-mono text-[12px] align-top"
+        style={{
+          padding: "10px 12px",
+          color: "#9CA3AF",
+          background: "transparent",
+        }}
+      >
+        {shot.index}
+      </td>
+      {visible.map((key) => {
+        if (key === "characters") {
+          const cells: React.ReactNode[] = [];
+          for (let gi = 0; gi < Math.max(1, charCount); gi++) {
+            const char = shot.characters[gi];
+            cells.push(
+              <WrapCell
+                key={`${shot.id}-char-${gi}-name`}
+                value={char?.name ?? ""}
+                placeholder={`输入角色${gi + 1}的名字，如 少女`}
+                onChange={(v) =>
+                  char ? updateScriptCharacter(nodeId, shot.id, char.id, { name: v }) : undefined
+                }
+                style={{ borderLeft: gi > 0 ? "1px solid #2A2D33" : undefined }}
+              />,
+              <WrapCell
+                key={`${shot.id}-char-${gi}-desc`}
+                value={char?.desc ?? ""}
+                placeholder="描述角色的外形、服饰与气质，如 白裙、扎马尾的少女"
+                onChange={(v) =>
+                  char ? updateScriptCharacter(nodeId, shot.id, char.id, { desc: v }) : undefined
+                }
+              />,
+              <ImageCell
+                key={`${shot.id}-char-${gi}-img`}
+                src={char?.image}
+                onUpload={(src) =>
+                  char
+                    ? setScriptImage(nodeId, shot.id, { kind: "character", charId: char.id }, src)
+                    : undefined
+                }
+                onRemove={() =>
+                  char
+                    ? removeScriptImage(nodeId, shot.id, {
+                        kind: "character",
+                        charId: char.id,
+                      })
+                    : undefined
+                }
+              />,
+            );
+          }
+          return cells;
+        }
+        if (key === "refImage") {
+          return (
+            <ImageCell
+              key={`${shot.id}-ref`}
+              src={shot.refImage}
+              onUpload={(src) => setScriptImage(nodeId, shot.id, { kind: "ref" }, src)}
+              onRemove={() => removeScriptImage(nodeId, shot.id, { kind: "ref" })}
+            />
+          );
+        }
+        // Description cell with @mention rendering
+        if (key === "description") {
+          return (
+            <DescriptionCell
+              key={`${shot.id}-description`}
+              value={shot.description}
+              placeholder={CELL_PLACEHOLDER.description}
+              onChange={(v) => updateScriptShot(nodeId, shot.id, { description: v })}
+            />
+          );
+        }
+        // Dialogue cell with optional popover override
+        if (key === "dialogue" && renderDialogueCell) {
+          return (
+            <td key={`${shot.id}-dialogue`} className="align-top" style={{ padding: "10px 12px" }}>
+              {renderDialogueCell(shot)}
+            </td>
+          );
+        }
+        // Final prompt column — status-based rendering
+        if (key === "finalPrompt") {
+          return <FinalPromptCell key={`${shot.id}-finalPrompt`} shot={shot} nodeId={nodeId} />;
+        }
+        const field = TEXT_FIELDS[key];
+        if (!field) return <td key={key} />;
+        return (
+          <WrapCell
+            key={`${shot.id}-${key}`}
+            value={String(shot[field] ?? "")}
+            placeholder={CELL_PLACEHOLDER[key]}
+            onChange={(v) => {
+              if (field === "duration") {
+                const num = parseFloat(v);
+                if (!isNaN(num) && num > 0) updateScriptShot(nodeId, shot.id, { duration: num });
+                return;
+              }
+              updateScriptShot(nodeId, shot.id, {
+                [field]: v,
+              } as Partial<ScriptShot>);
+            }}
+          />
+        );
+      })}
+      {/* Delete */}
+      <td className="align-top" style={{ padding: "8px 4px" }}>
+        <button
+          className="opacity-0 group-hover/row:opacity-100 flex items-center justify-center rounded hover:bg-red-500/10 transition-opacity"
+          style={{ width: 24, height: 24 }}
+          onClick={() => {
+            if (confirm(`删除第 ${shot.index} 镜？`)) removeScriptShot(nodeId, shot.id);
+          }}
+        >
+          <Trash2 className="w-3.5 h-3.5" style={{ color: "#EF4444" }} />
+        </button>
+      </td>
+    </tr>
+  );
+});

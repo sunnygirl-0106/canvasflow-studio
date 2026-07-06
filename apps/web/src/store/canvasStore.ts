@@ -468,8 +468,13 @@ export const useCanvas = create<StoreState>((set, get) => ({
 
   pushHistory: () => {
     const { nodes, edges, past } = get();
+    // The store updates immutably (every mutation produces new node/data/edge
+    // references via .map + spread), so a snapshot only needs to capture the
+    // current array references — no deep clone. This mirrors undo/redo below,
+    // which already push `{ nodes, edges }` by reference. Deep-cloning here was
+    // pure overhead (cloning base64/long-prompt trees on every edit).
     set({
-      past: [...past.slice(-49), { nodes: structuredClone(nodes), edges: structuredClone(edges) }],
+      past: [...past.slice(-49), { nodes, edges }],
       future: [],
     });
   },

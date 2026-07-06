@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useCanvas } from "@/store/canvasStore";
+import { fileToDataUrl } from "@/lib/fileToDataUrl";
 
 const BASE = "/api";
 
@@ -54,11 +55,13 @@ export function useAssetUpload() {
 
         const data = await res.json();
 
-        // Dev fallback: S3 not configured, use local blob URL
+        // Dev fallback: S3 not configured. Inline as a base64 data URL so the
+        // image persists with the canvas across refresh (a `blob:` URL would be
+        // dead on reload). Size-capped by fileToDataUrl.
         if (data.mock) {
-          const blobUrl = URL.createObjectURL(file);
+          const dataUrl = await fileToDataUrl(file);
           setState({ uploading: false, progress: 100, error: null });
-          return { url: blobUrl };
+          return { url: dataUrl };
         }
 
         // 2. Direct upload to object storage via presigned URL

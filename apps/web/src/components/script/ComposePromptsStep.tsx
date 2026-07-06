@@ -1,6 +1,11 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { useCanvas, type ScriptData, type ScriptColumnKey } from "@/store/canvasStore";
+import {
+  useCanvas,
+  type ScriptData,
+  type ScriptColumnKey,
+  type ScriptShot,
+} from "@/store/canvasStore";
 import { ScriptTableView } from "./ScriptTableView";
 import { ComposePromptsDialog } from "./ComposePromptsDialog";
 import { DialoguePopover } from "./DialoguePopover";
@@ -28,6 +33,17 @@ export function ComposePromptsStep({ nodeId, script }: Props) {
 
   const composedCount = script.shots.filter((s) => s.finalPromptStatus === "done").length;
 
+  // Stable identity so the memoized <ShotRow> isn't invalidated every keystroke.
+  const renderDialogueCell = useCallback(
+    (shot: ScriptShot) => (
+      <DialoguePopover
+        value={shot.dialogue}
+        onChange={(v) => updateScriptShot(nodeId, shot.id, { dialogue: v })}
+      />
+    ),
+    [updateScriptShot, nodeId],
+  );
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 min-h-0 overflow-auto">
@@ -35,12 +51,7 @@ export function ComposePromptsStep({ nodeId, script }: Props) {
           nodeId={nodeId}
           script={script}
           visibleColumnOverride={STEP3_COLUMNS}
-          renderDialogueCell={(shot) => (
-            <DialoguePopover
-              value={shot.dialogue}
-              onChange={(v) => updateScriptShot(nodeId, shot.id, { dialogue: v })}
-            />
-          )}
+          renderDialogueCell={renderDialogueCell}
         />
       </div>
 

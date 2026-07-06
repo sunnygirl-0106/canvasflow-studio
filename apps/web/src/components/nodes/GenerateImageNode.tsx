@@ -11,6 +11,7 @@ import {
 import { ImagePromptPanel } from "@/components/ImagePromptPanel";
 import { ImageToolbar } from "@/components/ImageToolbar";
 import { useStoryboardMembership } from "@/lib/useStoryboardMembership";
+import { fileToDataUrl } from "@/lib/fileToDataUrl";
 import { useIsMultiSelected } from "@/lib/useIsMultiSelected";
 import { ShotIndexBadge } from "./ShotIndexBadge";
 import { NODE_COLORS as COLORS } from "./nodeTheme";
@@ -46,19 +47,24 @@ function GenerateImageNodeImpl({
   // container only repositions it. The shot-index badge is the only storyboard-
   // specific chrome, overlaid below.
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    updateNode(
-      id,
-      (n) =>
-        ({
-          ...n,
-          data: { ...n.data, src: url, status: "ready" },
-        }) as CanvasNode,
-    );
-    e.target.value = "";
+    input.value = "";
+    try {
+      const url = await fileToDataUrl(file);
+      updateNode(
+        id,
+        (n) =>
+          ({
+            ...n,
+            data: { ...n.data, src: url, status: "ready" },
+          }) as CanvasNode,
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "上传失败");
+    }
   };
 
   return (

@@ -12,6 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useCanvas, type CanvasNode, type NodeKind } from "@/store/canvasStore";
+import { fileToDataUrl } from "@/lib/fileToDataUrl";
 
 type PanelKind = NodeKind | "scriptMenu";
 
@@ -105,17 +106,21 @@ export function AddNodePanel() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = () => {
+    input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const url = URL.createObjectURL(file);
-      const id = addNodeAtPosition("generateImage", x, y);
-      updateNode(
-        id,
-        (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
-      );
-      select(id);
-      onClose();
+      try {
+        const url = await fileToDataUrl(file);
+        const id = addNodeAtPosition("generateImage", x, y);
+        updateNode(
+          id,
+          (n) => ({ ...n, data: { ...n.data, src: url, status: "ready" } }) as CanvasNode,
+        );
+        select(id);
+        onClose();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "上传失败");
+      }
     };
     input.click();
   };

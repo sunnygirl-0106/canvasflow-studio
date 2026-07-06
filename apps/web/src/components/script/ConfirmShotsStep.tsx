@@ -1,5 +1,11 @@
+import { useCallback } from "react";
 import { Plus, ArrowRight } from "lucide-react";
-import { useCanvas, type ScriptData, type ScriptColumnKey } from "@/store/canvasStore";
+import {
+  useCanvas,
+  type ScriptData,
+  type ScriptColumnKey,
+  type ScriptShot,
+} from "@/store/canvasStore";
 import { ScriptTableView } from "./ScriptTableView";
 import { DialoguePopover } from "./DialoguePopover";
 
@@ -24,6 +30,17 @@ export function ConfirmShotsStep({ nodeId, script, onNext }: Props) {
   const addScriptShot = useCanvas((s) => s.addScriptShot);
   const updateScriptShot = useCanvas((s) => s.updateScriptShot);
 
+  // Stable identity so the memoized <ShotRow> isn't invalidated every keystroke.
+  const renderDialogueCell = useCallback(
+    (shot: ScriptShot) => (
+      <DialoguePopover
+        value={shot.dialogue}
+        onChange={(v) => updateScriptShot(nodeId, shot.id, { dialogue: v })}
+      />
+    ),
+    [updateScriptShot, nodeId],
+  );
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 min-h-0 overflow-auto">
@@ -31,12 +48,7 @@ export function ConfirmShotsStep({ nodeId, script, onNext }: Props) {
           nodeId={nodeId}
           script={script}
           visibleColumnOverride={STEP1_COLUMNS}
-          renderDialogueCell={(shot) => (
-            <DialoguePopover
-              value={shot.dialogue}
-              onChange={(v) => updateScriptShot(nodeId, shot.id, { dialogue: v })}
-            />
-          )}
+          renderDialogueCell={renderDialogueCell}
         />
       </div>
 

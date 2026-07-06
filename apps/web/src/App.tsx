@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -31,7 +31,6 @@ import {
 import { Toolbar } from "@/components/Toolbar";
 import { BottomDock } from "@/components/BottomDock";
 
-import { ExportDialog } from "@/components/dialogs/ExportDialog";
 import { GenerateImageNode } from "@/components/nodes/GenerateImageNode";
 import { GenerateVideoNode } from "@/components/nodes/GenerateVideoNode";
 import { CompositionNode } from "@/components/nodes/CompositionNode";
@@ -45,11 +44,21 @@ import { LeftRail } from "@/components/LeftRail";
 import { MultiSelectionCTA } from "@/components/MultiSelectionCTA";
 import { CompositionCoachToast } from "@/components/CompositionCoachToast";
 import { ContextMenu } from "@/components/ContextMenu";
-import { CompositionEditor } from "@/components/composition/CompositionEditor";
-import { ScriptEditor } from "@/components/script/ScriptEditor";
 import { StoryboardToolbar } from "@/components/storyboard/StoryboardToolbar";
 import { GroupToolbar } from "@/components/group/GroupToolbar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+// Heavy, default-hidden surfaces — code-split so their chunks (incl. the large
+// TrackTimeline / script wizard trees) load only when the user opens them.
+const CompositionEditor = lazy(() =>
+  import("@/components/composition/CompositionEditor").then((m) => ({ default: m.CompositionEditor })),
+);
+const ScriptEditor = lazy(() =>
+  import("@/components/script/ScriptEditor").then((m) => ({ default: m.ScriptEditor })),
+);
+const ExportDialog = lazy(() =>
+  import("@/components/dialogs/ExportDialog").then((m) => ({ default: m.ExportDialog })),
+);
 
 export function App() {
   return (
@@ -61,6 +70,11 @@ export function App() {
 
 function Workspace() {
   const loadFromServer = useCanvas((s) => s.loadFromServer);
+  // Only mount the code-split editors once actually opened, so their chunks
+  // aren't fetched on first paint.
+  const compositionOpen = useCanvas((s) => s.editorCompId !== null);
+  const scriptOpen = useCanvas((s) => s.editorScriptId !== null);
+  const exportOpen = useCanvas((s) => s.exportOpen !== false);
 
   useEffect(() => {
     loadFromServer("proj-1");
@@ -79,13 +93,25 @@ function Workspace() {
         <CompositionCoachToast />
         <ContextMenu />
       </div>
-      <ErrorBoundary>
-        <CompositionEditor />
-      </ErrorBoundary>
-      <ErrorBoundary>
-        <ScriptEditor />
-      </ErrorBoundary>
-      <ExportDialog />
+      {compositionOpen && (
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <CompositionEditor />
+          </Suspense>
+        </ErrorBoundary>
+      )}
+      {scriptOpen && (
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <ScriptEditor />
+          </Suspense>
+        </ErrorBoundary>
+      )}
+      {exportOpen && (
+        <Suspense fallback={null}>
+          <ExportDialog />
+        </Suspense>
+      )}
     </div>
   );
 }
