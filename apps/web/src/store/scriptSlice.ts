@@ -648,14 +648,6 @@ export function createScriptSlice(set: SetState, get: GetState) {
       assetGenTimers.set(id, timer);
     },
 
-    cancelAssetGeneration: (id: string, assetId: string) =>
-      set((s) => {
-        const assets = (getScriptData(s.nodes, id)?.assets ?? []).map((a) =>
-          a.id === assetId ? { ...a, generationStatus: { state: "idle" as const } } : a,
-        );
-        return { nodes: patchScriptData(s.nodes, id, { assets }) };
-      }),
-
     // Idempotent reconcile: materialize every generated asset into a REAL
     // `image` canvas node, wrap them in a dashed-frame "资产组" on the script's
     // left (upstream), and keep all of it in sync with `script.assets[]`.

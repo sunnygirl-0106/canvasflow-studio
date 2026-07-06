@@ -156,7 +156,6 @@ export interface StoreState {
   updateAsset: (id: string, assetId: string, patch: Partial<ScriptAsset>) => void;
   removeAsset: (id: string, assetId: string) => void;
   generateAssets: (id: string, assetIds: string[]) => void;
-  cancelAssetGeneration: (id: string, assetId: string) => void;
   materializeAssetGroups: (scriptId: string) => void;
   reconcileShotReferenceEdges: (scriptId: string) => void;
   relayoutShotGroups: (scriptId: string) => void;

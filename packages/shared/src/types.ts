@@ -184,7 +184,6 @@ export interface ScriptData {
   wizardStep?: WizardStep;
   assets?: ScriptAsset[];
   globalStyle?: string;
-  assetGroupsMaterialized?: boolean;
   // Set when the user ungroups the asset group. Once detached, the materialized
   // image nodes become independent and the store stops auto-rebuilding the group
   // when assets are regenerated.
