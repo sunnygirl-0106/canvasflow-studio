@@ -201,6 +201,7 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
   const canUndo = useCanvas((s) => s.past.length > 0);
   const undo = useCanvas((s) => s.undo);
   const removeNode = useCanvas((s) => s.removeNode);
+  const removeNodes = useCanvas((s) => s.removeNodes);
   const copyNodes = useCanvas((s) => s.copyNodes);
   const pasteNodes = useCanvas((s) => s.pasteNodes);
   const hasClipboard = useCanvas((s) => (s.clipboard?.length ?? 0) > 0);
@@ -253,6 +254,43 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
     const close = () => setContextMenu(null);
 
     const items: ItemSpec[] = [];
+
+    // ── Multi-selection menu (box-select 2+ nodes, then right-click) ──
+    // Acts on the whole selection rather than a single node. Groups in the
+    // selection pull their members in too, matching single-group delete.
+    if (menu.selectedIds && menu.selectedIds.length >= 2) {
+      const selected = menu.selectedIds;
+      const expanded = new Set(selected);
+      for (const sid of selected) {
+        const n = nodes.find((x) => x.id === sid);
+        if (n?.kind === "nodeGroup") n.data.memberIds?.forEach((mid) => expanded.add(mid));
+      }
+      items.push({
+        kind: "item",
+        key: "multi-copy",
+        icon: Copy,
+        label: `复制选中 (${selected.length})`,
+        shortcut: "⌘C",
+        onClick: () => {
+          copyNodes(selected);
+          close();
+        },
+      });
+      items.push({ kind: "divider", key: "md0" });
+      items.push({
+        kind: "item",
+        key: "multi-delete",
+        icon: Trash2,
+        label: `删除选中 (${selected.length})`,
+        shortcut: "⌘⌫",
+        variant: "destructive",
+        onClick: () => {
+          removeNodes([...expanded]);
+          close();
+        },
+      });
+      return items;
+    }
 
     // ── Storyboard-specific menu ──
     if (isStoryboard && target) {
@@ -346,7 +384,10 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
         shortcut: "⌘⌫",
         variant: "destructive",
         onClick: () => {
-          removeNode(target.id);
+          // Delete the group together with everything inside it — the group is a
+          // container, so removing it should take its members, not orphan them.
+          const memberIds = target.kind === "nodeGroup" ? (target.data.memberIds ?? []) : [];
+          removeNodes([target.id, ...memberIds]);
           close();
         },
       });
@@ -514,6 +555,7 @@ function useMenuItems(onConfirmDelete: (id: string) => void): ItemSpec[] {
     canUndo,
     undo,
     removeNode,
+    removeNodes,
     copyNodes,
     pasteNodes,
     hasClipboard,

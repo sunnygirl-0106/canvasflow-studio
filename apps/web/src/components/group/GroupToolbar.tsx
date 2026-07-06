@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useReactFlow, useViewport } from "@xyflow/react";
-import {
-  Grid3X3,
-  Play,
-  ArrowRightLeft,
-  Ungroup,
-  Download,
-  ChevronDown,
-  LayoutGrid,
-  SquareDashedBottomCode,
-  ImageDown,
-} from "lucide-react";
+import { Grid3X3, Play, ArrowRightLeft, Ungroup, Download, ChevronDown } from "lucide-react";
 import { useCanvas, type GroupNodeData } from "@/store/canvasStore";
 import { ColorMenu } from "./ColorMenu";
 import { LayoutMenu } from "./LayoutMenu";
@@ -62,7 +52,10 @@ export function GroupToolbar() {
   const data: GroupNodeData = selectedGroup.data;
   const id = selectedGroup.id;
   const members = data.members ?? [];
-  const isVideoGroup = members.length > 0 && members.every((m) => m.kind === "generateVideo");
+  // 「转分镜组」only makes sense for a group of real images (资产组 / 普通图片组):
+  // a 分镜图组 (generateImage members) is already a storyboard, and a 视频组
+  // (generateVideo members) can't be stitched into one.
+  const canConvertToStoryboard = members.length > 0 && members.every((m) => m.kind === "image");
   const color = data.groupColor ?? "#56C7CF";
   const layout = data.groupLayout ?? "grid";
   const nodeW = data.groupWidth ?? 300;
@@ -91,90 +84,6 @@ export function GroupToolbar() {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2000);
   };
-
-  if (isVideoGroup) {
-    return (
-      <>
-        <div
-          ref={toolbarRef}
-          className="absolute z-50 pointer-events-auto inline-flex items-center gap-1 rounded-full fade-in"
-          style={{
-            left,
-            top,
-            height: 44,
-            padding: "0 8px",
-            background: "#FFFFFF",
-            border: "1px solid #E5E7EB",
-            boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {/* Ratio toggle */}
-          <ToolbarButton variant="light" onClick={() => {}}>
-            <span
-              className="inline-block rounded-full"
-              style={{ width: 20, height: 20, background: "#CBD5E1" }}
-            />
-          </ToolbarButton>
-
-          <ToolbarSep light />
-
-          {/* Grid */}
-          <ToolbarButton variant="light" onClick={() => {}}>
-            <LayoutGrid className="w-4 h-4" />
-          </ToolbarButton>
-
-          <ToolbarSep light />
-
-          {/* Execute group — blue accent */}
-          <button
-            onClick={() => setShowExecuteDialog(true)}
-            className="inline-flex items-center gap-1.5 rounded-full h-8 px-3 text-[13px] font-semibold transition-colors"
-            style={{
-              color: "#38BDF8",
-              background: "transparent",
-              fontFamily: "PingFang SC, Inter, system-ui",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#F0F9FF";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-            }}
-          >
-            <Play className="w-3.5 h-3.5" style={{ color: "#38BDF8" }} />
-            整组执行
-          </button>
-
-          <ToolbarSep light />
-
-          {/* Ungroup */}
-          <ToolbarButton variant="light" onClick={() => ungroupGroup(id)}>
-            <SquareDashedBottomCode className="w-3.5 h-3.5" />
-            解组
-          </ToolbarButton>
-
-          <ToolbarSep light />
-
-          {/* Batch download */}
-          <ToolbarButton variant="light" onClick={handleDownload}>
-            <ImageDown className="w-3.5 h-3.5" />
-            批量下载
-          </ToolbarButton>
-        </div>
-
-        <ExecuteGroupDialog
-          open={showExecuteDialog}
-          members={members}
-          onConfirm={() => {
-            setShowExecuteDialog(false);
-            executeGroup(id);
-          }}
-          onCancel={() => setShowExecuteDialog(false)}
-        />
-      </>
-    );
-  }
 
   return (
     <div
@@ -246,13 +155,17 @@ export function GroupToolbar() {
 
       <ToolbarSep />
 
-      {/* Convert to storyboard */}
-      <ToolbarButton variant="dark" onClick={() => convertGroupToStoryboard(id)}>
-        <ArrowRightLeft className="w-3.5 h-3.5" />
-        转分镜组
-      </ToolbarButton>
+      {/* Convert to storyboard — only for real-image groups (资产组 / 图片组) */}
+      {canConvertToStoryboard && (
+        <>
+          <ToolbarButton variant="dark" onClick={() => convertGroupToStoryboard(id)}>
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+            转分镜组
+          </ToolbarButton>
 
-      <ToolbarSep />
+          <ToolbarSep />
+        </>
+      )}
 
       {/* Ungroup */}
       <ToolbarButton variant="dark" onClick={() => ungroupGroup(id)}>

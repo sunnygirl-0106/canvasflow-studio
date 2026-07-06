@@ -372,6 +372,12 @@ export interface ContextMenuState {
   x: number;
   y: number;
   targetNodeId: string | null;
+  /**
+   * All currently-selected node ids at the moment the menu opened. Present when
+   * the user right-clicks with a box/multi-selection active (2+ nodes) so the
+   * menu can offer a bulk "删除选中" action instead of acting on one node.
+   */
+  selectedIds?: string[];
 }
 
 export type Snapshot = { nodes: CanvasNode[]; edges: Edge[] };

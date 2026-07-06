@@ -644,6 +644,28 @@ export const useCanvas = create<StoreState>((set, get) => ({
               },
             } as CanvasNode;
           }
+          // Composition tracks hold clips bound to source nodes via `bindings`.
+          // When a bound node is deleted, drop the now-orphaned clip so the
+          // timeline never references a node that no longer exists.
+          if (
+            n.kind === "composition" &&
+            n.data.tracks.some((t) =>
+              t.clips.some((c) => c.bindings.length > 0 && c.bindings.every((b) => drop.has(b))),
+            )
+          ) {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                tracks: n.data.tracks.map((t) => ({
+                  ...t,
+                  clips: t.clips.filter(
+                    (c) => c.bindings.length === 0 || !c.bindings.every((b) => drop.has(b)),
+                  ),
+                })),
+              },
+            } as CanvasNode;
+          }
           return n;
         }),
       edges: s.edges.filter((e) => !drop.has(e.from) && !drop.has(e.to)),

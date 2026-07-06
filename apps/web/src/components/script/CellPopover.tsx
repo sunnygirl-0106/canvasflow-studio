@@ -17,6 +17,12 @@ interface Props {
    * the current draft. Used by the dialogue cell for its 台词/旁白 shortcuts.
    */
   extraButtons?: (append: (text: string) => void) => React.ReactNode;
+  /**
+   * What to show in the collapsed trigger when the value is empty. Defaults to
+   * an em dash; the dialogue cell overrides it with a "+" to hint at adding
+   * lines.
+   */
+  emptyIndicator?: React.ReactNode;
 }
 
 /**
@@ -25,7 +31,14 @@ interface Props {
  * 保存 button. Flips above the trigger and clamps to the viewport when there is
  * no room below.
  */
-export function CellPopover({ value, onChange, placeholder, renderValue, extraButtons }: Props) {
+export function CellPopover({
+  value,
+  onChange,
+  placeholder,
+  renderValue,
+  extraButtons,
+  emptyIndicator,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [coords, setCoords] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
@@ -112,7 +125,7 @@ export function CellPopover({ value, onChange, placeholder, renderValue, extraBu
             value
           )
         ) : (
-          <span style={{ color: "#6B7280" }}>—</span>
+          <span style={{ color: "#6B7280" }}>{emptyIndicator ?? "—"}</span>
         )}
       </div>
 

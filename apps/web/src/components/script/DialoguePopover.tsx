@@ -17,6 +17,7 @@ export function DialoguePopover({ value, onChange }: Props) {
     <CellPopover
       value={value}
       onChange={onChange}
+      emptyIndicator="+"
       placeholder="输入台词或旁白，例如：台词: 今天的风好舒服啊……"
       extraButtons={(append) => (
         <>

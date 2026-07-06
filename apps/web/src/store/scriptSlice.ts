@@ -466,7 +466,8 @@ export function createScriptSlice(set: SetState, get: GetState) {
             model: opts.model,
             aspect: opts.aspectRatio,
             resolution: opts.resolution,
-            prompt: m.shot.finalPrompt || m.shot.videoPrompt,
+            // 视频运动提示词 (falls back to the composed 最终提示词 / description).
+            prompt: m.shot.videoPrompt || m.shot.finalPrompt || m.shot.description,
           },
         };
       });
@@ -808,10 +809,14 @@ export function createScriptSlice(set: SetState, get: GetState) {
       const groupX = scriptNode.x;
       const groupY = scriptNode.y + 500;
 
+      // Empty generator cells: no cover image yet. Each carries the shot's
+      // prompt (分镜提示词, falling back to the composed 最终提示词 / description)
+      // so the prompt panel is pre-filled, but the thumbnail stays blank until
+      // the group is run via 整组执行. Mirrors 视频组 (batchGenerateVideoFromScript).
       const memberMeta = selectedShots.map((shot, i) => ({
         id: `sbimg-${ts}-${i}`,
         name: `镜 ${shot.index}`,
-        src: placeholderImage(`sb-${ts}-${i}`, 400, 225),
+        prompt: shot.imagePrompt || shot.finalPrompt || shot.description,
       }));
 
       const { containerNode: groupNode, memberPositions } = buildContainer({
@@ -821,7 +826,11 @@ export function createScriptSlice(set: SetState, get: GetState) {
         name: `分镜图 · ${script.title}`,
         memberIds: memberMeta.map((m) => m.id),
         origin: { x: groupX, y: groupY },
-        members: memberMeta.map((m) => ({ id: m.id, kind: "image" as NodeKind, name: m.name })),
+        members: memberMeta.map((m) => ({
+          id: m.id,
+          kind: "generateImage" as NodeKind,
+          name: m.name,
+        })),
         groupColor: "#0EA5E9",
       });
 
@@ -829,13 +838,13 @@ export function createScriptSlice(set: SetState, get: GetState) {
         const cell = memberPositions.get(m.id)!;
         return {
           id: m.id,
-          kind: "image",
+          kind: "generateImage",
           x: cell.x,
           y: cell.y,
           data: {
             name: m.name,
-            src: m.src,
-            status: "ready",
+            status: "empty",
+            prompt: m.prompt,
           },
         };
       });

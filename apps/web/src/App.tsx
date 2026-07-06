@@ -384,16 +384,30 @@ function Canvas() {
         }}
         onPaneContextMenu={(e) => {
           e.preventDefault();
+          // Right-clicking empty canvas with an active box-selection should still
+          // offer to delete that selection, not just the pane's default actions.
+          const selected = getSelectedNodeIds();
           setContextMenu({
             x: "clientX" in e ? e.clientX : 0,
             y: "clientY" in e ? e.clientY : 0,
             targetNodeId: null,
+            selectedIds: selected.length >= 2 ? selected : undefined,
           });
         }}
         onNodeContextMenu={(e, node) => {
           e.preventDefault();
-          select(node.id);
-          setContextMenu({ x: e.clientX, y: e.clientY, targetNodeId: node.id });
+          // If the clicked node is part of a multi-selection, keep the whole
+          // selection intact so the menu can act on all of it. Otherwise collapse
+          // to just this node.
+          const selected = getSelectedNodeIds();
+          const inMulti = selected.length >= 2 && selected.includes(node.id);
+          if (!inMulti) select(node.id);
+          setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            targetNodeId: node.id,
+            selectedIds: inMulti ? selected : undefined,
+          });
         }}
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 0.9 }}
