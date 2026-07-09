@@ -48,6 +48,8 @@ export function StoryboardToolbar() {
 
   const [openMenu, setOpenMenu] = useState<"ratio" | "grid" | "stitch" | null>(null);
   const [confirmAction, setConfirmAction] = useState<"clear" | null>(null);
+  // Pending grid change awaiting confirmation (only when it would evict members).
+  const [pendingGrid, setPendingGrid] = useState<{ rows: number; cols: number } | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   // Reset menu when selection changes
@@ -72,6 +74,17 @@ export function StoryboardToolbar() {
   const sb = selectedSb.data.storyboard;
   const id = selectedSb.id;
   const isFromScript = !!selectedSb.data.scriptSourceId;
+
+  // Grid change: if the new capacity can't hold all current members, the tail
+  // (highest shot numbers) would be evicted from the group. Confirm first.
+  const handleGridSelect = (rows: number, cols: number) => {
+    if (rows * cols < sb.memberIds.length) {
+      setPendingGrid({ rows, cols });
+    } else {
+      setStoryboardGrid(id, rows, cols);
+    }
+  };
+  const evictCount = pendingGrid ? sb.memberIds.length - pendingGrid.rows * pendingGrid.cols : 0;
 
   // Calculate node width in canvas coords, then convert top-center to screen coords
   const nodeW = storyboardSize(sb.rows, sb.cols, sb.ratio).width;
@@ -143,7 +156,7 @@ export function StoryboardToolbar() {
               <GridSizeMenu
                 currentRows={sb.rows}
                 currentCols={sb.cols}
-                onSelect={(r, c) => setStoryboardGrid(id, r, c)}
+                onSelect={(r, c) => handleGridSelect(r, c)}
                 onClose={() => setOpenMenu(null)}
               />
             )}
@@ -215,7 +228,7 @@ export function StoryboardToolbar() {
                 <GridSizeMenu
                   currentRows={sb.rows}
                   currentCols={sb.cols}
-                  onSelect={(r, c) => setStoryboardGrid(id, r, c)}
+                  onSelect={(r, c) => handleGridSelect(r, c)}
                   onClose={() => setOpenMenu(null)}
                 />
               )}
@@ -300,6 +313,19 @@ export function StoryboardToolbar() {
           setConfirmAction(null);
         }}
         onCancel={() => setConfirmAction(null)}
+      />
+
+      {/* Confirm dialog for shrinking the grid below the member count */}
+      <ConfirmDialog
+        open={pendingGrid !== null}
+        title="缩小宫格"
+        message={`新宫格只能容纳 ${pendingGrid ? pendingGrid.rows * pendingGrid.cols : 0} 张，序号靠后的 ${evictCount} 张图片将移出分镜组、成为画布上的独立节点（原有连线保留，此操作可撤销）。确认继续？`}
+        confirmLabel="移出并缩小"
+        onConfirm={() => {
+          if (pendingGrid) setStoryboardGrid(id, pendingGrid.rows, pendingGrid.cols);
+          setPendingGrid(null);
+        }}
+        onCancel={() => setPendingGrid(null)}
       />
     </>
   );

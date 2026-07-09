@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { STORYBOARD_PRESETS, STORYBOARD_MAX } from "@/store/canvasStore";
+import { STORYBOARD_PRESETS, STORYBOARD_MAX, STORYBOARD_MAX_CELLS } from "@/store/canvasStore";
 import { MenuPanel, MenuItem } from "@/components/ui/Menu";
 
 interface GridSizeMenuProps {
@@ -111,21 +111,28 @@ export function GridSizeMenu({ currentRows, currentCols, onSelect, onClose }: Gr
             {Array.from({ length: rowsShown * colsShown }, (_, i) => {
               const c = (i % colsShown) + 1;
               const r = Math.floor(i / colsShown) + 1;
-              const active = c <= hover.cols && r <= hover.rows;
+              // Capacity cap: cells beyond STORYBOARD_MAX_CELLS can't be picked.
+              const disabled = c * r > STORYBOARD_MAX_CELLS;
+              const active = !disabled && c <= hover.cols && r <= hover.rows;
               return (
                 <div
                   key={i}
-                  onMouseEnter={() => setHover({ cols: c, rows: r })}
+                  onMouseEnter={() => {
+                    if (!disabled) setHover({ cols: c, rows: r });
+                  }}
                   onClick={() => {
+                    if (disabled) return;
                     onSelect(r, c);
                     onClose();
                   }}
+                  title={disabled ? `最多 ${STORYBOARD_MAX_CELLS} 格` : undefined}
                   style={{
                     width: CELL,
                     height: CELL,
                     borderRadius: 8,
-                    cursor: "pointer",
-                    background: active ? "#AECBFA" : "#F1F2F4",
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    background: disabled ? "#F8FAFC" : active ? "#AECBFA" : "#F1F2F4",
+                    opacity: disabled ? 0.5 : 1,
                     transition: "background 120ms",
                   }}
                 />

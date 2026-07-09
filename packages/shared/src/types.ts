@@ -91,6 +91,9 @@ export const STORYBOARD_RATIOS: AspectRatio[] = [
 ];
 export const STORYBOARD_PRESETS = [2, 3, 4, 5];
 export const STORYBOARD_MAX = 10;
+// Storyboard node cap. Grid capacity (rows × cols) is bounded by this so the
+// custom picker can't build a grid with more cells than the group can ever hold.
+export const STORYBOARD_MAX_CELLS = 25;
 export const STORYBOARD_CELL_PX = 220;
 export const STORYBOARD_GAP_PX = 16;
 export const DEFAULT_RATIO: AspectRatio = "16:9";

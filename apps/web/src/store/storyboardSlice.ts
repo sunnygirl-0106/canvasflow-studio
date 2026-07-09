@@ -18,6 +18,7 @@ import {
   type GetState,
   DEFAULT_RATIO,
   STORYBOARD_MAX,
+  STORYBOARD_MAX_CELLS,
 } from "./types";
 
 const MEDIA_KINDS: NodeKind[] = ["image", "generateImage", "generateVideo"];
@@ -105,6 +106,10 @@ export function createStoryboardSlice(set: SetState, get: GetState) {
       const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
       rows = clamp(rows, 1, STORYBOARD_MAX);
       cols = clamp(cols, 1, STORYBOARD_MAX);
+      // Never build a grid with more cells than the group can hold. If the
+      // requested capacity exceeds the cap, drop rows (keeping cols) until it
+      // fits — the picker already prevents this, this is a defensive guard.
+      while (rows * cols > STORYBOARD_MAX_CELLS && rows > 1) rows -= 1;
       const { nodes } = get();
       const sbNode = nodes.find((n) => n.id === id);
       if (!sbNode || sbNode.kind !== "storyboard") return;
